@@ -97,6 +97,14 @@ struct proc {
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 
+  //todo how to set default with 0
+  //variables for approximate SJF
+  int mean_ticks;
+  int last_ticks;
+
+//variable for fcfs
+int last_runnable_time;
+
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)

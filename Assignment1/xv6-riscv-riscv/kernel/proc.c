@@ -143,6 +143,11 @@ allocproc(void)
     p->context.ra = (uint64)forkret;
     p->context.sp = p->kstack + PGSIZE;
 
+    //added for version one struct
+    p->mean_ticks = 0;
+    p->last_ticks = 0;
+    p->last_runnable_time = 0;
+
     return p;
 }
 
@@ -248,6 +253,7 @@ userinit(void)
 
     //added last_runnable time
     acquire(&tickslock);
+
     p->last_runnable_time = ticks;
     release(&tickslock);
 
@@ -480,15 +486,21 @@ void sjfScheduler(void){ //todo where do we calculate the mean and where to init
         struct proc* min_proc = proc;
 
         for(p = proc; p < &proc[NPROC]; p++) {
+            acquire(&p->lock)
             if(p->state == RUNNABLE && p->mean_ticks < min_proc->mean_ticks)
                 min_proc = p;
+            release(&p->lock);
         }
         acquire(&min_proc->lock);
         // to release its lock and then reacquire it
         // before jumping back to us.
         min_proc->state = RUNNING;
         c->proc = min_proc;
+
+        int startingTicks = ticks;
         swtch(&c->context, &min_proc->context);
+        p->last_ticks = ticks - startingTicks;
+        p->mean_ticks = ((10 - rate) * p->mean_ticks + p->last_ticks * (rate)) / 10;
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
@@ -509,8 +521,10 @@ void fcfs(void){
         struct proc* max_lrt_proc = proc; // lrt = last runnable time
 
         for(p = proc; p < &proc[NPROC]; p++) {
+            acquire(&p->lock);
             if(p->state == RUNNABLE && p->mean_ticks > max_lrt_proc->mean_ticks)
                 max_lrt_proc = p;
+            release(&p->lock);
         }
         acquire(&max_lrt_proc->lock);
         // to release its lock and then reacquire it
@@ -545,7 +559,6 @@ scheduler(void)
 #ifdef FCFS
     fcfsScheduler();
 #endif
-
 }
 
 // Switch to scheduler.  Must hold only p->lock
@@ -703,8 +716,13 @@ int kill_system(void){
     struct proc *p;
     int i = 0;
     for(p = proc; p < &proc[NPROC]; p++, i++) {
-        if(p->pid != 1 && p->pid != 2)
+        acquire(&p->lock);
+        if(p->pid != 1 && p->pid != 2) {
+            release(&p->lock);
             kill(p->pid);
+        } else{
+            release(&p->lock);
+        }
     }
 
     return 0;
@@ -713,28 +731,26 @@ int kill_system(void){
 
 //pause all user processes for the number of seconds specified by the parameter
 int pause_system(int seconds){
+    int finishedTicks = ticks + seconds/10000000; //todo check if can get 1000000 as number
     struct proc *p;
     enum procstate states[NPROC];
+    struct spinlock specSL; //todo check if need to init
     int i = 0;
     for(p = proc; p < &proc[NPROC]; p++, i++) { // aquire & change the proc status to runnable
         acquire(&p->lock);
-        states[i] = p->state;
+        //states[i] = p->state;
         if(p->state == RUNNING) {
-            p->state = RUNNABLE;
-
+            sleep(specSL,specSL);
             //added last_runnable time
             acquire(&tickslock);
             p->last_runnable_time = ticks;
             release(&tickslock);
         }
     }
-    //sleep(seconds)
-    for(i = 0, p = proc; p < &proc[NPROC]; p++, i++) { // return the proc state to origin
-        p->state = states[i];
-        release(&p->lock);
-    }
+    //todo sleep(seconds) check if should be busy wait
+    while(ticks < finishedTicks);
+    wakeup(specSL);
     return 0;
-    //todo implement
 }
 
 // Copy to either a user address, or kernel address,
