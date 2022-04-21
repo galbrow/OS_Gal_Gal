@@ -98,12 +98,18 @@ struct proc {
   struct proc *parent;         // Parent process
 
   //todo how to set default with 0
-  //variables for approximate SJF
+  //variables for approximate SJF - section 3
   int mean_ticks;
   int last_ticks;
 
-//variable for fcfs
-int last_runnable_time;
+  //variable for fcfs - section 3
+  int last_runnable_time;
+
+  //section 4
+  int sleeping_time;           //in ticks
+  int runnable_time;           //in ticks
+  int running_time;            //in ticks
+  int last_time_changed;       //the current tick of the previous state change.
 
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
@@ -117,3 +123,11 @@ int last_runnable_time;
 };
 
 extern int rate;
+extern int sleeping_processes_mean;
+extern int running_processes_mean;
+extern int running_time_mean;
+extern int program_time;
+extern int start_time;
+extern int cpu_utilization;
+
+running_time_mean = ((running_processes_mean * (num_of_process)) + running_time_mean) / (num_of_process+1)

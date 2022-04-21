@@ -13,6 +13,11 @@ struct proc proc[NPROC];
 struct proc *initproc;
 
 int rate = 5;
+int sleeping_processes_mean = 0;
+int running_processes_mean = 0;
+int running_time_mean = 0;
+int program_time = 0;
+int cpu_utilization = 0;
 
 int nextpid = 1;
 struct spinlock pid_lock;
@@ -49,6 +54,8 @@ void
 procinit(void)
 {
     struct proc *p;
+
+    start_time = ticks; //initialize the starting time of the system.
 
     initlock(&pid_lock, "nextpid");
     initlock(&wait_lock, "wait_lock");
@@ -147,6 +154,13 @@ allocproc(void)
     p->mean_ticks = 0;
     p->last_ticks = 0;
     p->last_runnable_time = 0;
+
+    //section 4
+
+    p->runnable_time = 0;
+    p->running_time = 0;
+    p->sleeping_time = 0;
+    p->last_time_changed = ticks;
 
     return p;
 }
@@ -251,10 +265,9 @@ userinit(void)
 
     p->state = RUNNABLE;
 
-    //added last_runnable time
     acquire(&tickslock);
-
-    p->last_runnable_time = ticks;
+    p->last_runnable_time = ticks;     //added last_runnable time for fcfs
+    p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
     release(&tickslock);
 
     release(&p->lock);
@@ -327,9 +340,9 @@ fork(void)
     acquire(&np->lock);
     np->state = RUNNABLE;
 
-    //added last_runnable time
     acquire(&tickslock);
-    np->last_runnable_time = ticks;
+    np->last_runnable_time = ticks;     //added last_runnable time for fcfs
+    np->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
     release(&tickslock);
 
     release(&np->lock);
@@ -389,6 +402,9 @@ exit(int status)
 
     p->xstate = status;
     p->state = ZOMBIE;
+
+    program_time = program_time + ticks - start_time;
+    cpu_utilization = program_time / (ticks - start_time);
 
     release(&wait_lock);
 
@@ -461,6 +477,12 @@ void defScheduler(void){
                 // Switch to chosen process.  It is the process's job
                 // to release its lock and then reacquire it
                 // before jumping back to us.
+
+                acquire(&tickslock);
+                p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
+                p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
+                release(&tickslock);
+
                 p->state = RUNNING;
                 c->proc = p;
                 swtch(&c->context, &p->context);
@@ -494,6 +516,12 @@ void sjfScheduler(void){ //todo where do we calculate the mean and where to init
         acquire(&min_proc->lock);
         // to release its lock and then reacquire it
         // before jumping back to us.
+
+        acquire(&tickslock);
+        p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
+        p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
+        release(&tickslock);
+
         min_proc->state = RUNNING;
         c->proc = min_proc;
 
@@ -529,6 +557,12 @@ void fcfs(void){
         acquire(&max_lrt_proc->lock);
         // to release its lock and then reacquire it
         // before jumping back to us.
+
+        acquire(&tickslock);
+        p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
+        p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
+        release(&tickslock);
+
         max_lrt_proc->state = RUNNING;
         c->proc = max_lrt_proc;
         swtch(&c->context, &max_lrt_proc->context);
@@ -596,9 +630,10 @@ yield(void)
     acquire(&p->lock);
     p->state = RUNNABLE;
 
-    //added last_runnable time
     acquire(&tickslock);
-    p->last_runnable_time = ticks;
+    p->running_time = p->running_time + (ticks - p->last_time_changed);
+    p->last_runnable_time = ticks;     //added last_runnable time for fcfs
+    p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
     release(&tickslock);
 
     sched();
@@ -643,6 +678,11 @@ sleep(void *chan, struct spinlock *lk)
     acquire(&p->lock);  //DOC: sleeplock1
     release(lk);
 
+    acquire(&tickslock);
+    p->running_time = p->running_time + ticks - p->last_time_changed;
+    p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
+    release(&tickslock);
+
     // Go to sleep.
     p->chan = chan;
     p->state = SLEEPING;
@@ -670,9 +710,10 @@ wakeup(void *chan)
             if(p->state == SLEEPING && p->chan == chan) {
                 p->state = RUNNABLE;
 
-                //added last_runnable time
                 acquire(&tickslock);
-                p->last_runnable_time = ticks;
+                p->sleeping_time = p->sleeping_time + ticks - p->last_time_changed;
+                p->last_runnable_time = ticks;     //added last_runnable time for fcfs
+                p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
                 release(&tickslock);
 
             }
@@ -697,9 +738,10 @@ kill(int pid)
                 // Wake process from sleep().
                 p->state = RUNNABLE;
 
-                //added last_runnable time
                 acquire(&tickslock);
-                p->last_runnable_time = ticks;
+                p->sleeping_time = p->sleeping_time + ticks - p->last_time_changed;
+                p->last_runnable_time = ticks;     //added last_runnable time for fcfs
+                p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
                 release(&tickslock);
             }
             release(&p->lock);
