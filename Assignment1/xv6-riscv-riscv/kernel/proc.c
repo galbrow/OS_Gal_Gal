@@ -458,6 +458,8 @@ void defScheduler(void) {
     struct proc *p;
     struct cpu *c = mycpu();
     printf("pauseTicks: %d\n", pauseTicks);
+    printf("--------------------------Default-----------------------------\n");
+
     c->proc = 0;
     for (;;) {
         // Avoid deadlock by ensuring that devices can interrupt.
@@ -493,6 +495,7 @@ void defScheduler(void) {
 void sjfScheduler(void) { //todo where do we calculate the mean and where to init with 0
     struct proc *p;
     struct cpu *c = mycpu();
+    printf("--------------------------SJF-----------------------------\n");
 
     c->proc = 0;
     for (;;) {
@@ -502,75 +505,72 @@ void sjfScheduler(void) { //todo where do we calculate the mean and where to ini
         struct proc *min_proc = proc;
         for (p = proc; p < &proc[NPROC]; p++) {
             acquire(&p->lock);
-            if (p->state == RUNNABLE && p->mean_ticks < min_proc->mean_ticks)
+            if (p->state == RUNNABLE && p->mean_ticks <= min_proc->mean_ticks)
                 min_proc = p;
             release(&p->lock);
         }
-        printf("after loop");
 
         acquire(&min_proc->lock);
-//        if (min_proc->state == RUNNABLE && ticks >= pauseTicks) {
+        if (min_proc->state == RUNNABLE && ticks >= pauseTicks) {
 
-            printf("after acuire\n");
             // to release its lock and then reacquire it
             // before jumping back to us.
-            p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
-            p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
+            min_proc->runnable_time = min_proc->runnable_time + ticks - min_proc->last_time_changed;
+            min_proc->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
 
             min_proc->state = RUNNING;
             c->proc = min_proc;
 
             int startingTicks = ticks;        //starting ticks for sjf priority
-            printf("before swtch \n");
             swtch(&c->context, &min_proc->context);
-            printf("after swtch\n");
-            p->last_ticks = ticks - startingTicks;
-            p->mean_ticks = ((10 - rate) * p->mean_ticks + p->last_ticks * (rate)) / 10;
+            min_proc->last_ticks = ticks - startingTicks;
+            min_proc->mean_ticks = ((10 - rate) * min_proc->mean_ticks + min_proc->last_ticks * (rate)) / 10;
 
             // Process is done running for now.
             // It should have changed its p->state before coming back.
             c->proc = 0;
-//        }
+        }
         release(&min_proc->lock);
 
 
     }
 }
 
-void fcfs(void) {
+void fcfsScheduler(void) {
     struct proc *p;
     struct cpu *c = mycpu();
-
+    printf("--------------------------FCFS-----------------------------\n");
     c->proc = 0;
     for (;;) {
         // Avoid deadlock by ensuring that devices can interrupt.
         intr_on();
-        if (ticks >= pauseTicks && ticks >= pauseTicks) {
-            struct proc *max_lrt_proc = proc; // lrt = last runnable time
+            struct proc *min_lrt_proc = proc; // lrt = last runnable time
 
             for (p = proc; p < &proc[NPROC]; p++) {
                 acquire(&p->lock);
-                if (p->state == RUNNABLE && p->mean_ticks > max_lrt_proc->mean_ticks)
-                    max_lrt_proc = p;
+                if (p->state == RUNNABLE && p->last_runnable_time <= min_lrt_proc->last_runnable_time)
+                    min_lrt_proc = p;
                 release(&p->lock);
             }
-            acquire(&max_lrt_proc->lock);
+            acquire(&min_lrt_proc->lock);
             // to release its lock and then reacquire it
             // before jumping back to us.
 
-            p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
-            p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
+            if(min_lrt_proc->state == RUNNABLE && ticks >= pauseTicks) {
+                min_lrt_proc->runnable_time = min_lrt_proc->runnable_time + ticks - min_lrt_proc->last_time_changed;
+                min_lrt_proc->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
 
-            max_lrt_proc->state = RUNNING;
-            c->proc = max_lrt_proc;
+                min_lrt_proc->state = RUNNING;
+                c->proc = min_lrt_proc;
 
-            swtch(&c->context, &max_lrt_proc->context);
+                swtch(&c->context, &min_lrt_proc->context);
 
-            // Process is done running for now.
-            // It should have changed its p->state before coming back.
-            c->proc = 0;
-            release(&max_lrt_proc->lock);
-        }
+                // Process is done running for now.
+                // It should have changed its p->state before coming back.
+                c->proc = 0;
+            }
+            release(&min_lrt_proc->lock);
+
     }
 }
 
@@ -583,15 +583,17 @@ void fcfs(void) {
 //    via swtch back to the scheduler.
 void
 scheduler(void) {
-#ifdef DEFAULT
-    defScheduler();
-#endif
-#ifdef SJF
-    sjfScheduler();
-#endif
-#ifdef FCFS
-    fcfsScheduler();
-#endif
+
+    #ifdef DEFAULT
+        defScheduler();
+    #endif
+    #ifdef SJF
+        sjfScheduler();
+    #endif
+    #ifdef FCFS
+        fcfsScheduler();
+    #endif
+
 }
 
 // Switch to scheduler.  Must hold only p->lock
