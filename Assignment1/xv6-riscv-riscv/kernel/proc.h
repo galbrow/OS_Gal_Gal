@@ -97,7 +97,6 @@ struct proc {
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 
-  //todo how to set default with 0
   //variables for approximate SJF - section 3
   int mean_ticks;
   int last_ticks;
@@ -122,10 +121,11 @@ struct proc {
   char name[16];               // Process name (debugging)
 };
 
+extern int pauseTicks;
 extern int rate;
 extern int sleeping_processes_mean;
 extern int running_processes_mean;
-extern int running_time_mean;
+extern int runnable_processes_mean;
 extern int program_time;
 extern int start_time;
 extern int cpu_utilization;

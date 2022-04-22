@@ -101,9 +101,11 @@ uint64 sys_pause(void){
 
     if(argint(0, &seconds) < 0)
         return -1;
-    return sys_pause(seconds);
+    sys_pause(seconds);
+    return 0;
 }
 
 uint64 sys_killSys(void){
-    return sys_killSys();
+    sys_killSys();
+    return 0;
 }

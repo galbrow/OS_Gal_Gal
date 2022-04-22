@@ -12,10 +12,11 @@ struct proc proc[NPROC];
 
 struct proc *initproc;
 
+int pauseTicks = 0;
 int rate = 5;
 int sleeping_processes_mean = 0;
 int running_processes_mean = 0;
-int running_time_mean = 0;
+int runnable_processes_mean = 0;
 int program_time = 0;
 int cpu_utilization = 0;
 
@@ -400,11 +401,18 @@ exit(int status)
 
     acquire(&p->lock);
 
+    //added statistics for section 4
+    acquire(&tickslock)
+    p->running_time = p->running_time + ticks - p->last_time_changed;
+    program_time = program_time + p->running_time;
+    cpu_utilization = program_time / (ticks - start_time);
+    sleeping_processes_mean = (sleeping_processes_mean*(nextpid-1) + p->sleeping_time)/(nextpid);
+    running_processes_mean = (running_processes_mean*(nextpid-1) + p->running_time)/(nextpid);
+    runnable_processes_mean = (runnable_processes_mean*(nextpid-1) + p->runnable_time)/(nextpid);
+    release(&tickslock)
+
     p->xstate = status;
     p->state = ZOMBIE;
-
-    program_time = program_time + ticks - start_time;
-    cpu_utilization = program_time / (ticks - start_time);
 
     release(&wait_lock);
 
@@ -478,6 +486,7 @@ void defScheduler(void){
                 // to release its lock and then reacquire it
                 // before jumping back to us.
 
+                while(ticks < pauseTicks);        //busy wait until pause time ended
                 acquire(&tickslock);
                 p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
                 p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
@@ -485,6 +494,7 @@ void defScheduler(void){
 
                 p->state = RUNNING;
                 c->proc = p;
+
                 swtch(&c->context, &p->context);
 
                 // Process is done running for now.
@@ -517,6 +527,7 @@ void sjfScheduler(void){ //todo where do we calculate the mean and where to init
         // to release its lock and then reacquire it
         // before jumping back to us.
 
+        while(ticks < pauseTicks);        //busy wait until pause time ended
         acquire(&tickslock);
         p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
         p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
@@ -525,7 +536,8 @@ void sjfScheduler(void){ //todo where do we calculate the mean and where to init
         min_proc->state = RUNNING;
         c->proc = min_proc;
 
-        int startingTicks = ticks;
+        int startingTicks = ticks;        //starting ticks for sjf priority
+
         swtch(&c->context, &min_proc->context);
         p->last_ticks = ticks - startingTicks;
         p->mean_ticks = ((10 - rate) * p->mean_ticks + p->last_ticks * (rate)) / 10;
@@ -558,6 +570,7 @@ void fcfs(void){
         // to release its lock and then reacquire it
         // before jumping back to us.
 
+        while(ticks < pauseTicks);         //busy wait until pause time ended
         acquire(&tickslock);
         p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
         p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
@@ -565,6 +578,7 @@ void fcfs(void){
 
         max_lrt_proc->state = RUNNING;
         c->proc = max_lrt_proc;
+
         swtch(&c->context, &max_lrt_proc->context);
 
         // Process is done running for now.
@@ -773,25 +787,8 @@ int kill_system(void){
 
 //pause all user processes for the number of seconds specified by the parameter
 int pause_system(int seconds){
-    int finishedTicks = ticks + seconds/10000000; //todo check if can get 1000000 as number
-    struct proc *p;
-    enum procstate states[NPROC];
-    struct spinlock specSL; //todo check if need to init
-    int i = 0;
-    for(p = proc; p < &proc[NPROC]; p++, i++) { // aquire & change the proc status to runnable
-        acquire(&p->lock);
-        //states[i] = p->state;
-        if(p->state == RUNNING) {
-            sleep(specSL,specSL);
-            //added last_runnable time
-            acquire(&tickslock);
-            p->last_runnable_time = ticks;
-            release(&tickslock);
-        }
-    }
-    //todo sleep(seconds) check if should be busy wait
-    while(ticks < finishedTicks);
-    wakeup(specSL);
+    pauseTicks = ticks + seconds*10000000; //todo check if can get 1000000 as number
+    yield();
     return 0;
 }
 
