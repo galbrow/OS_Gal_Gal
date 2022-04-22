@@ -395,12 +395,10 @@ exit(int status) {
     sleeping_processes_mean = (sleeping_processes_mean * (nextpid - 1) + p->sleeping_time) / (nextpid);
     running_processes_mean = (running_processes_mean * (nextpid - 1) + p->running_time) / (nextpid);
     runnable_processes_mean = (runnable_processes_mean * (nextpid - 1) + p->runnable_time) / (nextpid);
-
     p->xstate = status;
     p->state = ZOMBIE;
 
     release(&wait_lock);
-
     // Jump into the scheduler, never to return.
     sched();
     panic("zombie exit");
@@ -458,7 +456,6 @@ void defScheduler(void) {
     struct proc *p;
     struct cpu *c = mycpu();
     printf("pauseTicks: %d\n", pauseTicks);
-    printf("--------------------------Default-----------------------------\n");
 
     c->proc = 0;
     for (;;) {
@@ -495,7 +492,7 @@ void defScheduler(void) {
 void sjfScheduler(void) { //todo where do we calculate the mean and where to init with 0
     struct proc *p;
     struct cpu *c = mycpu();
-    printf("--------------------------SJF-----------------------------\n");
+
 
     c->proc = 0;
     for (;;) {
@@ -539,7 +536,6 @@ void sjfScheduler(void) { //todo where do we calculate the mean and where to ini
 void fcfsScheduler(void) {
     struct proc *p;
     struct cpu *c = mycpu();
-    printf("--------------------------FCFS-----------------------------\n");
     c->proc = 0;
     for (;;) {
         // Avoid deadlock by ensuring that devices can interrupt.
@@ -585,12 +581,15 @@ void
 scheduler(void) {
 
 #ifdef FCFS
+    printf("FCFS\n");
     fcfsScheduler();
 #endif
 #ifdef SJF
+    printf("SJF\n");
     sjfScheduler();
 #endif
 #ifdef DEFAULT
+    printf("DEFAULT\n");
     defScheduler();
 #endif
 
@@ -763,6 +762,15 @@ int kill_system(void) {
 int pause_system(int seconds) {
     pauseTicks = ticks + seconds * 10; //todo check if can get 1000000 as number
     yield();
+    return 0;
+}
+
+int print_stats(void) {
+    printf("runnable_processes_mean: %d\n",runnable_processes_mean);
+    printf("running_processes_mean: %d\n",running_processes_mean);
+    printf("sleeping_processes_mean: %d\n",sleeping_processes_mean);
+    printf("cpu_utilization: %d\n", cpu_utilization);
+    printf("program_time: %d\n", program_time);
     return 0;
 }
 

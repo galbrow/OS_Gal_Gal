@@ -56,7 +56,9 @@ int
 main(int argc, char *argv[])
 {
     //set_economic_mode_dem(10, 100);
-    pause_system_dem(10, 10, 100);
-    kill_system_dem(10, 100);
+    pause_system_dem(10, 2, 100);
+//    kill_system_dem(10, 100);
     exit(0);
+    print_stats();
+
 }

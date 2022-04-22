@@ -121,12 +121,12 @@ struct proc {
   char name[16];               // Process name (debugging)
 };
 
-extern int pauseTicks;
-extern int rate;
-extern int sleeping_processes_mean;
-extern int running_processes_mean;
-extern int runnable_processes_mean;
-extern int program_time;
-extern int start_time;
-extern int cpu_utilization;
+//extern int pauseTicks; //todo check if remove
+//extern int rate;
+//extern int sleeping_processes_mean;
+//extern int running_processes_mean;
+//extern int runnable_processes_mean;
+//extern int program_time;
+//extern int start_time;
+//extern int cpu_utilization;
 
