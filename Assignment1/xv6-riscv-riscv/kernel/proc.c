@@ -500,17 +500,20 @@ void sjfScheduler(void) { //todo where do we calculate the mean and where to ini
         intr_on();
 
         struct proc *min_proc = proc;
-        if (ticks >= pauseTicks) {
-            for (p = proc; p < &proc[NPROC]; p++) {
-                acquire(&p->lock);
-                if (p->state == RUNNABLE && p->mean_ticks < min_proc->mean_ticks)
-                    min_proc = p;
-                release(&p->lock);
-            }
-            acquire(&min_proc->lock);
+        for (p = proc; p < &proc[NPROC]; p++) {
+            acquire(&p->lock);
+            if (p->state == RUNNABLE && p->mean_ticks < min_proc->mean_ticks)
+                min_proc = p;
+            release(&p->lock);
+        }
+        printf("after loop");
+
+        acquire(&min_proc->lock);
+//        if (min_proc->state == RUNNABLE && ticks >= pauseTicks) {
+
+            printf("after acuire\n");
             // to release its lock and then reacquire it
             // before jumping back to us.
-
             p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
             p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
 
@@ -518,16 +521,18 @@ void sjfScheduler(void) { //todo where do we calculate the mean and where to ini
             c->proc = min_proc;
 
             int startingTicks = ticks;        //starting ticks for sjf priority
-
+            printf("before swtch \n");
             swtch(&c->context, &min_proc->context);
+            printf("after swtch\n");
             p->last_ticks = ticks - startingTicks;
             p->mean_ticks = ((10 - rate) * p->mean_ticks + p->last_ticks * (rate)) / 10;
 
             // Process is done running for now.
             // It should have changed its p->state before coming back.
             c->proc = 0;
-            release(&min_proc->lock);
-        }
+//        }
+        release(&min_proc->lock);
+
 
     }
 }
@@ -540,7 +545,7 @@ void fcfs(void) {
     for (;;) {
         // Avoid deadlock by ensuring that devices can interrupt.
         intr_on();
-        if (ticks >= pauseTicks) {
+        if (ticks >= pauseTicks && ticks >= pauseTicks) {
             struct proc *max_lrt_proc = proc; // lrt = last runnable time
 
             for (p = proc; p < &proc[NPROC]; p++) {
