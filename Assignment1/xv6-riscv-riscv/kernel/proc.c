@@ -544,32 +544,32 @@ void fcfsScheduler(void) {
     for (;;) {
         // Avoid deadlock by ensuring that devices can interrupt.
         intr_on();
-            struct proc *min_lrt_proc = proc; // lrt = last runnable time
+        struct proc *min_lrt_proc = proc; // lrt = last runnable time
 
-            for (p = proc; p < &proc[NPROC]; p++) {
-                acquire(&p->lock);
-                if (p->state == RUNNABLE && p->last_runnable_time <= min_lrt_proc->last_runnable_time)
-                    min_lrt_proc = p;
-                release(&p->lock);
-            }
-            acquire(&min_lrt_proc->lock);
-            // to release its lock and then reacquire it
-            // before jumping back to us.
+        for (p = proc; p < &proc[NPROC]; p++) {
+            acquire(&p->lock);
+            if (p->state == RUNNABLE && p->last_runnable_time <= min_lrt_proc->last_runnable_time)
+                min_lrt_proc = p;
+            release(&p->lock);
+        }
+        acquire(&min_lrt_proc->lock);
+        // to release its lock and then reacquire it
+        // before jumping back to us.
 
-            if(min_lrt_proc->state == RUNNABLE && ticks >= pauseTicks) {
-                min_lrt_proc->runnable_time = min_lrt_proc->runnable_time + ticks - min_lrt_proc->last_time_changed;
-                min_lrt_proc->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
+        if (ticks >= pauseTicks) {
+            min_lrt_proc->runnable_time = min_lrt_proc->runnable_time + ticks - min_lrt_proc->last_time_changed;
+            min_lrt_proc->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
 
-                min_lrt_proc->state = RUNNING;
-                c->proc = min_lrt_proc;
+            min_lrt_proc->state = RUNNING;
+            c->proc = min_lrt_proc;
 
-                swtch(&c->context, &min_lrt_proc->context);
+            swtch(&c->context, &min_lrt_proc->context);
 
-                // Process is done running for now.
-                // It should have changed its p->state before coming back.
-                c->proc = 0;
-            }
-            release(&min_lrt_proc->lock);
+            // Process is done running for now.
+            // It should have changed its p->state before coming back.
+            c->proc = 0;
+        }
+        release(&min_lrt_proc->lock);
 
     }
 }
@@ -584,15 +584,15 @@ void fcfsScheduler(void) {
 void
 scheduler(void) {
 
-    #ifdef DEFAULT
-        defScheduler();
-    #endif
-    #ifdef SJF
-        sjfScheduler();
-    #endif
-    #ifdef FCFS
-        fcfsScheduler();
-    #endif
+#ifdef FCFS
+    fcfsScheduler();
+#endif
+#ifdef SJF
+    sjfScheduler();
+#endif
+#ifdef DEFAULT
+    defScheduler();
+#endif
 
 }
 
