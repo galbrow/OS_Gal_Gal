@@ -130,4 +130,3 @@ extern int program_time;
 extern int start_time;
 extern int cpu_utilization;
 
-running_time_mean = ((running_processes_mean * (num_of_process)) + running_time_mean) / (num_of_process+1)

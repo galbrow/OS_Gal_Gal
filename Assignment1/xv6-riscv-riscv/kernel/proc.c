@@ -19,6 +19,7 @@ int running_processes_mean = 0;
 int runnable_processes_mean = 0;
 int program_time = 0;
 int cpu_utilization = 0;
+int start_time = 0;
 
 int nextpid = 1;
 struct spinlock pid_lock;
@@ -402,14 +403,14 @@ exit(int status)
     acquire(&p->lock);
 
     //added statistics for section 4
-    acquire(&tickslock)
+    acquire(&tickslock);
     p->running_time = p->running_time + ticks - p->last_time_changed;
     program_time = program_time + p->running_time;
     cpu_utilization = program_time / (ticks - start_time);
     sleeping_processes_mean = (sleeping_processes_mean*(nextpid-1) + p->sleeping_time)/(nextpid);
     running_processes_mean = (running_processes_mean*(nextpid-1) + p->running_time)/(nextpid);
     runnable_processes_mean = (runnable_processes_mean*(nextpid-1) + p->runnable_time)/(nextpid);
-    release(&tickslock)
+    release(&tickslock);
 
     p->xstate = status;
     p->state = ZOMBIE;
@@ -486,7 +487,10 @@ void defScheduler(void){
                 // to release its lock and then reacquire it
                 // before jumping back to us.
 
-                while(ticks < pauseTicks);        //busy wait until pause time ended
+                while(ticks < pauseTicks) {
+                    printf("%d \n", ticks); //todo remove
+
+                }       //busy wait until pause time ended
                 acquire(&tickslock);
                 p->runnable_time = p->runnable_time + ticks - p->last_time_changed;
                 p->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
@@ -518,7 +522,7 @@ void sjfScheduler(void){ //todo where do we calculate the mean and where to init
         struct proc* min_proc = proc;
 
         for(p = proc; p < &proc[NPROC]; p++) {
-            acquire(&p->lock)
+            acquire(&p->lock);
             if(p->state == RUNNABLE && p->mean_ticks < min_proc->mean_ticks)
                 min_proc = p;
             release(&p->lock);
@@ -787,7 +791,7 @@ int kill_system(void){
 
 //pause all user processes for the number of seconds specified by the parameter
 int pause_system(int seconds){
-    pauseTicks = ticks + seconds*10000000; //todo check if can get 1000000 as number
+    pauseTicks = ticks + seconds*10; //todo check if can get 1000000 as number
     yield();
     return 0;
 }

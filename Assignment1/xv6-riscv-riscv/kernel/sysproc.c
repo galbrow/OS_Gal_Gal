@@ -96,16 +96,16 @@ sys_uptime(void)
   return xticks;
 }
 
-uint64 sys_pause(void){
+uint64 sys_pause_system(void){
     int seconds;
 
     if(argint(0, &seconds) < 0)
         return -1;
-    sys_pause(seconds);
+    pause_system(seconds);
     return 0;
 }
 
-uint64 sys_killSys(void){
-    sys_killSys();
+uint64 sys_kill_system(void){
+    kill_system();
     return 0;
 }
