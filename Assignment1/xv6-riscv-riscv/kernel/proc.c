@@ -579,7 +579,6 @@ void fcfsScheduler(void) {
 //    via swtch back to the scheduler.
 void
 scheduler(void) {
-
 #ifdef FCFS
     printf("FCFS\n");
     fcfsScheduler();

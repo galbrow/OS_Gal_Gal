@@ -1,6 +1,3 @@
-//
-// Created by os on 4/22/22.
-//
 #include "kernel/param.h"
 #include "kernel/types.h"
 #include "kernel/stat.h"
@@ -12,10 +9,10 @@
 #include "kernel/riscv.h"
 
 void env(int size, int interval, char* env_name) {
-    int result = 1;
-    int loop_size = (int)(10e6);
-    int n_forks = 2;
     int pid;
+    int result = 1;
+    int loop_size = (100e6);
+    int n_forks = 2;
     for (int i = 0; i < n_forks; i++) {
         pid = fork();
     }
@@ -43,12 +40,9 @@ void env_freq() {
 }
 
 int
-main(int argc, char *argv[]) {
-    printf("env_large started\n");
+main(int argc, char *argv[])
+{
     env_large();
-    print_stats();
-    printf("env_freq started\n");
-    env_freq();
     print_stats();
     exit(0);
 }
