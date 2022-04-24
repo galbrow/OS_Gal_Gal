@@ -1,0 +1,72 @@
+cmake_minimum_required(VERSION 3.22)
+project(Assignment1 C)
+
+set(CMAKE_C_STANDARD 11)
+
+include_directories(xv6-riscv-riscv/kernel)
+include_directories(xv6-riscv-riscv/user)
+
+add_executable(Assignment1
+        xv6-riscv-riscv/kernel/bio.c
+        xv6-riscv-riscv/kernel/buf.h
+        xv6-riscv-riscv/kernel/console.c
+        xv6-riscv-riscv/kernel/date.h
+        xv6-riscv-riscv/kernel/defs.h
+        xv6-riscv-riscv/kernel/elf.h
+        xv6-riscv-riscv/kernel/exec.c
+        xv6-riscv-riscv/kernel/fcntl.h
+        xv6-riscv-riscv/kernel/file.c
+        xv6-riscv-riscv/kernel/file.h
+        xv6-riscv-riscv/kernel/fs.c
+        xv6-riscv-riscv/kernel/fs.h
+        xv6-riscv-riscv/kernel/kalloc.c
+        xv6-riscv-riscv/kernel/log.c
+        xv6-riscv-riscv/kernel/main.c
+        xv6-riscv-riscv/kernel/memlayout.h
+        xv6-riscv-riscv/kernel/param.h
+        xv6-riscv-riscv/kernel/pipe.c
+        xv6-riscv-riscv/kernel/plic.c
+        xv6-riscv-riscv/kernel/printf.c
+        xv6-riscv-riscv/kernel/proc.c
+        xv6-riscv-riscv/kernel/proc.h
+        xv6-riscv-riscv/kernel/ramdisk.c
+        xv6-riscv-riscv/kernel/riscv.h
+        xv6-riscv-riscv/kernel/sleeplock.c
+        xv6-riscv-riscv/kernel/sleeplock.h
+        xv6-riscv-riscv/kernel/spinlock.c
+        xv6-riscv-riscv/kernel/spinlock.h
+        xv6-riscv-riscv/kernel/start.c
+        xv6-riscv-riscv/kernel/stat.h
+        xv6-riscv-riscv/kernel/string.c
+        xv6-riscv-riscv/kernel/syscall.c
+        xv6-riscv-riscv/kernel/syscall.h
+        xv6-riscv-riscv/kernel/sysfile.c
+        xv6-riscv-riscv/kernel/sysproc.c
+        xv6-riscv-riscv/kernel/trap.c
+        xv6-riscv-riscv/kernel/types.h
+        xv6-riscv-riscv/kernel/uart.c
+        xv6-riscv-riscv/kernel/virtio.h
+        xv6-riscv-riscv/kernel/virtio_disk.c
+        xv6-riscv-riscv/kernel/vm.c
+        xv6-riscv-riscv/mkfs/mkfs.c
+        xv6-riscv-riscv/user/cat.c
+        xv6-riscv-riscv/user/echo.c
+        xv6-riscv-riscv/user/forktest.c
+        xv6-riscv-riscv/user/grep.c
+        xv6-riscv-riscv/user/grind.c
+        xv6-riscv-riscv/user/init.c
+        xv6-riscv-riscv/user/kill.c
+        xv6-riscv-riscv/user/ln.c
+        xv6-riscv-riscv/user/ls.c
+        xv6-riscv-riscv/user/mkdir.c
+        xv6-riscv-riscv/user/printf.c
+        xv6-riscv-riscv/user/rm.c
+        xv6-riscv-riscv/user/sh.c
+        xv6-riscv-riscv/user/stressfs.c
+        xv6-riscv-riscv/user/test.c
+        xv6-riscv-riscv/user/ulib.c
+        xv6-riscv-riscv/user/umalloc.c
+        xv6-riscv-riscv/user/user.h
+        xv6-riscv-riscv/user/usertests.c
+        xv6-riscv-riscv/user/wc.c
+        xv6-riscv-riscv/user/zombie.c)

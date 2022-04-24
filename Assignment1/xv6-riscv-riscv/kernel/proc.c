@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "defs.h"
 
+struct Queue queue[NPROC];
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -391,7 +393,7 @@ exit(int status) {
     //added statistics for section 4
     p->running_time = p->running_time + ticks - p->last_time_changed;
     program_time = program_time + p->running_time;
-    cpu_utilization = program_time / (ticks - start_time);
+    cpu_utilization = (program_time * 100) / (ticks - start_time);
     sleeping_processes_mean = (sleeping_processes_mean * (nextpid - 1) + p->sleeping_time) / (nextpid);
     running_processes_mean = (running_processes_mean * (nextpid - 1) + p->running_time) / (nextpid);
     runnable_processes_mean = (runnable_processes_mean * (nextpid - 1) + p->runnable_time) / (nextpid);
@@ -463,9 +465,12 @@ void defScheduler(void) {
         intr_on();
 
         for (p = proc; p < &proc[NPROC]; p++) {
+            if(ticks < pauseTicks) {
+                if(p == &proc[NPROC-1]) p = proc-sizeof(&p);
+                continue;
+            };
             acquire(&p->lock);
-
-            if (p->state == RUNNABLE && ticks >= pauseTicks) {
+            if (p->state == RUNNABLE) { //&& ticks >= pauseTicks
                 // Switch to chosen process.  It is the process's job
                 // to release its lock and then reacquire it
                 // before jumping back to us.
@@ -489,7 +494,7 @@ void defScheduler(void) {
     }
 }
 
-void sjfScheduler(void) { //todo where do we calculate the mean and where to init with 0
+void sjfScheduler(void) {
     struct proc *p;
     struct cpu *c = mycpu();
 
@@ -500,15 +505,17 @@ void sjfScheduler(void) { //todo where do we calculate the mean and where to ini
         intr_on();
 
         struct proc *min_proc = proc;
+        sjfAlgo:
         for (p = proc; p < &proc[NPROC]; p++) {
             acquire(&p->lock);
             if (p->state == RUNNABLE && p->mean_ticks <= min_proc->mean_ticks)
                 min_proc = p;
             release(&p->lock);
         }
-
+        if(p == 0 ) continue;
+        if(ticks < pauseTicks) goto sjfAlgo; //changed
         acquire(&min_proc->lock);
-        if (min_proc->state == RUNNABLE && ticks >= pauseTicks) {
+        if (min_proc->state == RUNNABLE) { //&& ticks >= pauseTicks
 
             // to release its lock and then reacquire it
             // before jumping back to us.
@@ -541,18 +548,23 @@ void fcfsScheduler(void) {
         // Avoid deadlock by ensuring that devices can interrupt.
         intr_on();
         struct proc *min_lrt_proc = proc; // lrt = last runnable time
-
+        int min_lrt_time = -1;
+        fcfsAlgo:
         for (p = proc; p < &proc[NPROC]; p++) {
             acquire(&p->lock);
-            if (p->state == RUNNABLE && p->last_runnable_time <= min_lrt_proc->last_runnable_time)
+            if (p->state == RUNNABLE && (min_lrt_time == -1 || p->last_runnable_time <= min_lrt_time)) {
                 min_lrt_proc = p;
+                min_lrt_time = p->last_runnable_time;
+            }
             release(&p->lock);
         }
+        if(min_lrt_proc == 0) continue;
+        if (ticks < pauseTicks) goto fcfsAlgo;
         acquire(&min_lrt_proc->lock);
         // to release its lock and then reacquire it
         // before jumping back to us.
 
-        if (ticks >= pauseTicks) {
+        //if (ticks >= pauseTicks) {
             min_lrt_proc->runnable_time = min_lrt_proc->runnable_time + ticks - min_lrt_proc->last_time_changed;
             min_lrt_proc->last_time_changed = ticks;      //setting the starting ticks when getting to runnable for section 4
 
@@ -564,7 +576,7 @@ void fcfsScheduler(void) {
             // Process is done running for now.
             // It should have changed its p->state before coming back.
             c->proc = 0;
-        }
+//        }
         release(&min_lrt_proc->lock);
 
     }
@@ -754,12 +766,11 @@ int kill_system(void) {
     }
 
     return 0;
-    //todo check if need to verify kill returned 0, in case not what should we do.
 }
 
 //pause all user processes for the number of seconds specified by the parameter
 int pause_system(int seconds) {
-    pauseTicks = ticks + seconds * 10; //todo check if can get 1000000 as number
+    pauseTicks = ticks + seconds * 10;
     yield();
     return 0;
 }
