@@ -19,6 +19,7 @@ extern void forkret(void);
 static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
+extern uint64 cas(volatile void* addr, int expected , int newval);
 
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
@@ -85,14 +86,28 @@ myproc(void) {
   return p;
 }
 
+//1 i n t count e r = 0 ;
+//2 i n t increment ( ) {
+//    3 i n t old ;
+//    4 do {
+//        5 old = count e r ;
+//        6 } whi l e ( cas (&counter , old , old+1) ) ;
+//    7 r e turn old ;
+//    8 }
+
 int
 allocpid() {
   int pid;
-  
-  acquire(&pid_lock);
-  pid = nextpid;
-  nextpid = nextpid + 1;
-  release(&pid_lock);
+  do {
+      pid = nextpid;
+  } while(cas(&nextpid, pid, pid+1));
+  return pid;
+//  //todo delete old implementation
+//      int pid;
+//    acquire(&pid_lock);
+//  pid = nextpid;
+//  nextpid = nextpid + 1;
+//  release(&pid_lock);
 
   return pid;
 }
