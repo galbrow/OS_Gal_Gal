@@ -10,6 +10,15 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
+//todo beginning
+int indexes[NPROC]; //table which holds each proc's index from the proc table
+int running_start = -1; //todo debate on init value
+int unused_start = 0;
+int runnable_start = -1;
+int sleeping_start = -1;
+int zombie_start = -1;
+///todo end
+
 struct proc *initproc;
 
 int nextpid = 1;
@@ -55,6 +64,12 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
   }
+
+  //todo beginning
+  for(int i=0; i< NPROC; i++){
+      indexes[i] = i;
+  }
+  //todo end
 }
 
 // Must be called with interrupts disabled,
@@ -101,14 +116,6 @@ allocpid() {
   do {
       pid = nextpid;
   } while(cas(&nextpid, pid, pid+1));
-  return pid;
-//  //todo delete old implementation
-//      int pid;
-//    acquire(&pid_lock);
-//  pid = nextpid;
-//  nextpid = nextpid + 1;
-//  release(&pid_lock);
-
   return pid;
 }
 
@@ -668,4 +675,12 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int set_cpu(int cpu_num){
+    return 1; //todo impl
+}
+
+int get_cpu(){
+    return cpuid(); //todo check!!!!
 }
