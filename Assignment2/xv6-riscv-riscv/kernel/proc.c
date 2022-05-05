@@ -39,40 +39,43 @@ extern uint64 cas(volatile void *addr, int expected, int newval);
 struct spinlock wait_lock;
 
 //validate
-int validate(struct proc pred, struct proc curr, int list_index) {
-    struct proc node = lists_heads[list_index];
-    while (node.next != -1) { // while I'm not the last node in the list
-        if (node.pid == pred.pid) // Node pred still accessible
-            return proc[pred.next].pid == curr.pid; // Node pred.next still successor to curr
-        node = proc[node.next];
+int validate(struct proc *pred, struct proc *curr, int list_index) {
+    struct proc *node = &lists_heads[list_index];
+    while (node->next != -1) { // while I'm not the last node in the list
+        if (node == pred) {// Node pred still accessible
+            printf("inside if\n");
+            return &proc[pred->next] == curr; }// Node pred.next still successor to curr
+        node = &proc[node->next];
     }
+    printf("return 0\n");
     return 0;
 }
 
 
 // Remove
-//todo check how find proc's index
-int remove(struct proc item, int list_index) {
+int remove(struct proc *item, int list_index) {
+    printf("inside remove, proc pid: %d\n", item->pid);
     while (1) {
-        struct proc pred = lists_heads[list_index];
-        struct proc curr = proc[pred.next];
-        while (item.pid != proc[pred.next].pid) {
+        struct proc *pred = &lists_heads[list_index];
+        struct proc *curr = &proc[pred->next];
+        while (item != &proc[pred->next]) {
             pred = curr;
-            curr = proc[curr.next];
+            curr = &proc[curr->next];
         }
-
-        acquire(&pred.lock);
-        acquire(&curr.lock);
-
+        printf("remove: end while loop\n");
+        acquire(&pred->next_lock);
+        acquire(&curr->next_lock);
+        printf("remove: after acquire\n");
         if (validate(pred, curr, list_index)) {
-            if (curr.pid == item.pid) {
-                pred.next = curr.next;
-                release(&pred.lock);
-                release(&curr.lock);
+            printf("remove: after validate\n");
+            if (curr == item) {
+                pred->next = curr->next;
+                release(&pred->next_lock);
+                release(&curr->next_lock);
                 return 1;
             } else {
-                release(&pred.lock);
-                release(&curr.lock);
+                release(&pred->next_lock);
+                release(&curr->next_lock);
                 return 0;
             }
         }
@@ -81,26 +84,35 @@ int remove(struct proc item, int list_index) {
 
 int add(struct proc *item, int list_index) {
     while (1) {
-        struct proc pred = lists_heads[list_index];
-        acquire(&pred.lock);
-        acquire(&item->lock);
-        if(pred.next == -1) {
-            pred.next = item - proc; //\ sizeof(proc); //a -> b todo: check if correct
+        printf("add: \n");
+        struct proc *pred = &lists_heads[list_index];
+        acquire(&pred->next_lock);
+        // acquire(&item->next_lock); //todo check if needs to acquire the added item
+
+        printf("add: after acquire\n");
+        printf("add: pred->next is: %d\n", pred->next);
+        printf("add: pred location is: %d\n", item - proc);
+
+        if(pred->next == -1) {
+            printf("add: inside if p->next == -1\n");
+            pred->next = item - proc;  //a -> b // item-proc gives the item's index
             item->next = -1; // b->END_OF_LIST
-            release(&pred.lock);
-            release(&item->lock);
+            release(&pred->next_lock);
+//            release(&item->next_lock);
             return 1;
             //create next proc
         } else{
-            struct proc curr = proc[pred.next];
-            acquire(&curr.lock);
+            printf("add: inside else\n");
+            struct proc *curr = &proc[pred->next];
+            acquire(&curr->next_lock);
+            printf("add: after second acquire\n");
 
             if (validate(pred, curr, list_index)) {
-                pred.next = item - proc; /// sizeof(proc); //a -> b todo: check if correct
-                item->next = curr.next; // b->c
-                release(&pred.lock);
-                release(&curr.lock);
-                release(&item->lock);
+                pred->next = item - proc; //a -> b
+                item->next = curr->next; // b->c
+                release(&pred->next_lock);
+                release(&curr->next_lock);
+//                release(&item->next_lock);
 
                 return 1;
             }
@@ -132,6 +144,7 @@ procinit(void) {
     //init all the locks of the lists's head
     for (p = proc; p < &lists_heads[5]; p++) {
         initlock(&p->lock, "proc");
+        initlock(&p-> next_lock, "next_lock"); //init next_lock
         p->kstack = KSTACK((int) (p - proc));
     }
 
@@ -139,6 +152,7 @@ procinit(void) {
     initlock(&wait_lock, "wait_lock");
     for (p = proc; p < &proc[NPROC]; p++) {
         initlock(&p->lock, "proc");
+        initlock(&p-> next_lock, "next_lock"); //init next_lock
         p->kstack = KSTACK((int) (p - proc));
     }
 
@@ -241,6 +255,10 @@ allocproc(void) {
 // p->lock must be held.
 static void
 freeproc(struct proc *p) {
+    //remove from zombie list or from nowhere
+    if(p-> state == ZOMBIE)
+        remove(p, 4);
+
     if (p->trapframe)
         kfree((void *) p->trapframe);
     p->trapframe = 0;
@@ -254,7 +272,11 @@ freeproc(struct proc *p) {
     p->chan = 0;
     p->killed = 0;
     p->xstate = 0;
+
+    // add to unused list
+    add(p, 1);
     p->state = UNUSED;
+
 }
 
 // Create a user page table for a given process,
@@ -330,6 +352,10 @@ userinit(void) {
     safestrcpy(p->name, "initcode", sizeof(p->name));
     p->cwd = namei("/");
 
+    // remove from unused list and add to runnable
+    remove(p, 1);
+    add(p, 2);
+
     p->state = RUNNABLE;
 
     release(&p->lock);
@@ -398,6 +424,10 @@ fork(void) {
     release(&wait_lock);
 
     acquire(&np->lock);
+    // remove from unused list and add to runnable
+    remove(np, 1); //todo check the problem!!
+    add(np, 2);
+
     np->state = RUNNABLE;
     release(&np->lock);
 
@@ -533,6 +563,11 @@ scheduler(void) {
                 // Switch to chosen process.  It is the process's job
                 // to release its lock and then reacquire it
                 // before jumping back to us.
+
+                //remove from Runnable list and add to Running list
+//                remove(p, 2);
+//                add(p, 0);
+
                 p->state = RUNNING;
                 c->proc = p;
                 swtch(&c->context, &p->context);
@@ -542,6 +577,8 @@ scheduler(void) {
                 c->proc = 0;
             }
             release(&p->lock);
+
+
         }
     }
 }

@@ -12,18 +12,21 @@
 #include "kernel/riscv.h"
 
 int main(int argc, char* argv[]){
+    printf("main");
 //    int pid, pid1;
 //    pid = fork();
 //
 //    if (pid != 0)
-//        printf("pid: %d\n", pid);
+//        printf("0");
+////        printf("pid: %d\n", pid);
 //
 //    pid1 = fork();
 //    if (pid1 != 0)
+//        printf("0");
 //        printf("pid: %d\n", pid1);
 
-    int arr[3];
+//    struct proc arr[3];
 
-    printf("%d\n", &arr[2] - &arr[0]);
+//    printf("%d\n", &arr[2] - &arr[0]);
     return 0;
 };
