@@ -12,15 +12,18 @@
 #include "kernel/riscv.h"
 
 int main(int argc, char* argv[]){
-    int pid, pid1;
-    pid = fork();
+//    int pid, pid1;
+//    pid = fork();
+//
+//    if (pid != 0)
+//        printf("pid: %d\n", pid);
+//
+//    pid1 = fork();
+//    if (pid1 != 0)
+//        printf("pid: %d\n", pid1);
 
-    if (pid != 0)
-        printf("pid: %d\n", pid);
+    int arr[3];
 
-    pid1 = fork();
-    if (pid1 != 0)
-        printf("pid: %d\n", pid1);
-
+    printf("%d\n", &arr[2] - &arr[0]);
     return 0;
 };
