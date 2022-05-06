@@ -322,10 +322,9 @@ allocproc(void) {
 static void
 freeproc(struct proc *p) {
     //remove from zombie list and add to unused
-    if(p-> state == ZOMBIE){
-        remove(p, 4);
-        add(p, 1);
-    }
+    remove(p, 4);
+    add(p, 1);
+
 
     if (p->trapframe)
         kfree((void *) p->trapframe);
@@ -491,7 +490,7 @@ fork(void) {
     acquire(&np->lock);
     // remove from unused list and add to runnable
     remove(np, 1);
-    add(np, 2);
+    add(np, 2); //todo add to the father's cpu list
 
     np->state = RUNNABLE;
     release(&np->lock);
@@ -635,7 +634,7 @@ scheduler(void) {
                 //todo
                 //remove from Runnable list and add to Running list
                 remove_first_in_line(2);
-                add(p, 0);
+                add(p, 0); //todo remove
 
                 p->state = RUNNING;
                 c->proc = p;
@@ -780,10 +779,10 @@ kill(int pid) {
         if (p->pid == pid) {
             p->killed = 1;
             if (p->state == SLEEPING) {
-                //todo
-                //remove from sleeping and add to runnable
-                remove(p, 3);
-                add(p, 2);
+//                //todo check if need to add -> this method isn't mentioned in the list
+//                //remove from sleeping and add to runnable
+//                remove(p, 3);
+//                add(p, 2);
                 // Wake process from sleep().
                 p->state = RUNNABLE;
             }
