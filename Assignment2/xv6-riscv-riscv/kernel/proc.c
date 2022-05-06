@@ -41,9 +41,8 @@ extern uint64 cas(volatile void *addr, int expected, int newval);
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
-void printList(int list_index){
-    struct proc *head = &lists_heads[list_index];
-    printf("------------------------------Printlist with index %d----------------------------------- \n", list_index);
+void printList(struct proc *head){
+    printf("------------------------------Printlist----------------------------------- \n");
     while(head->next != -1){
 //        printf("Proc address: %x\n", head);
         printf("Proc index in proc arr: %d\n", head - proc);
@@ -59,10 +58,12 @@ void printList(int list_index){
 //validate
 int validate(struct proc *pred, struct proc *curr, int list_index) {
     struct proc *node = &lists_heads[list_index];
-    if (list_index == 2) //if remove from runnable then go to cpu list
-        node = &runnable_heads[get_cpu()];
+//    if (list_index == 2) //if remove from runnable then go to cpu list
+//        node = &runnable_heads[get_cpu()];
     while (node->next != -1) { // while I'm not the last node in the list
+//        printf("node->next %d\n", node->next);
         if (node == pred) {// Node pred still accessible
+//            printf("inside if\n");
             return &proc[pred->next] == curr; }// Node pred.next still successor to curr
         node = &proc[node->next];
     }
@@ -72,15 +73,13 @@ int validate(struct proc *pred, struct proc *curr, int list_index) {
 
 // Remove
 int remove(struct proc *item, int list_index) {
-    printf("remove: proc index: %d from list num: %d\n", item - proc, list_index);
+//    printf("remove: proc index: %d from list num: %d\n", item - proc, list_index);
     while (1) {
         struct proc *pred = &lists_heads[list_index];
-        if (list_index == 2) //if remove from runnable then go to cpu list
-            pred = &runnable_heads[get_cpu()];
-        printf("pred->next: %d\n", pred->next);
-        printf("pred index: %d\n", pred - proc);
+//        if (list_index == 2) //if remove from runnable then go to cpu list
+//            pred = &runnable_heads[get_cpu()];
+
         struct proc *curr = &proc[pred->next];
-        printf("curr index: %d\n", curr - proc);
 
         while (pred->next != -1 && item != &proc[pred->next]) {
             pred = curr;
@@ -105,11 +104,11 @@ int remove(struct proc *item, int list_index) {
 }
 
 int add(struct proc *item, int list_index) {
-    printf("add: proc index: %d\n", item - proc);
+//    printf("add: proc index: %d\n", item - proc);
     while (1) {
         struct proc *pred = &lists_heads[list_index];
-        if (list_index == 2) //if remove from runnable then go to cpu list
-            pred = &runnable_heads[get_cpu()];
+//        if (list_index == 2) //if remove from runnable then go to cpu list
+//            pred = &runnable_heads[get_cpu()];
 
         acquire(&pred->next_lock);
 
@@ -118,7 +117,7 @@ int add(struct proc *item, int list_index) {
             item->next = -1; // b->END_OF_LIST
             release(&pred->next_lock);
             return 1;
-        //create next proc
+            //create next proc
         } else{
             struct proc *curr = &proc[pred->next];
             acquire(&curr->next_lock);
@@ -128,9 +127,34 @@ int add(struct proc *item, int list_index) {
                 pred->next = item - proc; //a -> b
                 release(&pred->next_lock);
                 release(&curr->next_lock);
-
                 return 1;
             }
+        }
+    }
+}
+
+int remove_first_in_line(int list_index){
+    while (1) {
+        struct proc *pred = &lists_heads[list_index];
+//        if (list_index == 2) //if remove from runnable then go to cpu list
+//            pred = &runnable_heads[get_cpu()];
+
+        struct proc *curr = &proc[pred->next];
+        if(pred->next == -1) //if line is empty
+            return 0;
+
+        while (curr->next != -1) { //stop when pred -> curr -> -1 ==== when curr is the last
+            pred = curr;
+            curr = &proc[curr->next];
+        }
+
+        acquire(&pred->next_lock);
+        acquire(&curr->next_lock);
+        if (validate(pred, curr, list_index)) {
+            pred->next = curr->next; //curr->next is -1
+            release(&pred->next_lock);
+            release(&curr->next_lock);
+            return 1;
         }
     }
 }
@@ -185,6 +209,19 @@ procinit(void) {
         p->kstack = KSTACK((int) (p - proc));
         add(p, 1); //add all the processes to Unused list at init
     }
+
+//    printf("printlist: 0\n");
+//    printList(&lists_heads[1]);
+//    printf("remove 60 from the list\n");
+//    remove(&proc[60], 1);
+//    printList(&lists_heads[1]);
+//    printf("add 60\n");
+//    add(&proc[60], 1);
+//    printList(&lists_heads[1]);
+//    printf("remove first in line\n");
+//    remove_first_in_line(1);
+//    printList(&lists_heads[1]);
+
 }
 
 // Must be called with interrupts disabled,
@@ -597,7 +634,7 @@ scheduler(void) {
                 // before jumping back to us.
                 //todo
                 //remove from Runnable list and add to Running list
-                remove(p, 2);
+                remove_first_in_line(2);
                 add(p, 0);
 
                 p->state = RUNNING;
@@ -820,6 +857,7 @@ int set_cpu(int cpu_num) {
 }
 
 int get_cpu() {
+    printf("mycpu: %d\n", mycpu());
     printf("cpu index: %d\n", mycpu()-cpus);
     return mycpu() - cpus; //todo check!!!!
 }
