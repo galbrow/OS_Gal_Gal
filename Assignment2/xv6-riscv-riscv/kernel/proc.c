@@ -10,7 +10,7 @@ struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
 
-//todo beginning
+//beginning
 struct proc lists_heads[5];
 //0= running_head; // Dummy link to the index of the first node in the list. if the list is empty it holds -1
 //1= unused_head;
@@ -18,7 +18,10 @@ struct proc lists_heads[5];
 //3= sleeping_head;
 //4= zombie_head;
 
-///todo end
+//runnable lists for each cpu
+struct proc runnable_heads[NCPU];
+
+//end
 
 struct proc *initproc;
 
@@ -38,36 +41,55 @@ extern uint64 cas(volatile void *addr, int expected, int newval);
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+void printList(int list_index){
+    struct proc *head = &lists_heads[list_index];
+    printf("------------------------------Printlist with index %d----------------------------------- \n", list_index);
+    while(head->next != -1){
+//        printf("Proc address: %x\n", head);
+        printf("Proc index in proc arr: %d\n", head - proc);
+//        printf("Proc->next %d\n", head.next);
+        head = &proc[head->next];
+    }
+    printf("Proc index in proc arr: %d\n", head - proc);
+    printf("-------------------------------------------------------------------\n");
+
+}
+
+
 //validate
 int validate(struct proc *pred, struct proc *curr, int list_index) {
     struct proc *node = &lists_heads[list_index];
+    if (list_index == 2) //if remove from runnable then go to cpu list
+        node = &runnable_heads[get_cpu()];
     while (node->next != -1) { // while I'm not the last node in the list
         if (node == pred) {// Node pred still accessible
-            printf("inside if\n");
             return &proc[pred->next] == curr; }// Node pred.next still successor to curr
         node = &proc[node->next];
     }
-    printf("return 0\n");
     return 0;
 }
 
 
 // Remove
 int remove(struct proc *item, int list_index) {
-    printf("inside remove, proc pid: %d\n", item->pid);
+    printf("remove: proc index: %d from list num: %d\n", item - proc, list_index);
     while (1) {
         struct proc *pred = &lists_heads[list_index];
+        if (list_index == 2) //if remove from runnable then go to cpu list
+            pred = &runnable_heads[get_cpu()];
+        printf("pred->next: %d\n", pred->next);
+        printf("pred index: %d\n", pred - proc);
         struct proc *curr = &proc[pred->next];
-        while (item != &proc[pred->next]) {
+        printf("curr index: %d\n", curr - proc);
+
+        while (pred->next != -1 && item != &proc[pred->next]) {
             pred = curr;
             curr = &proc[curr->next];
         }
-        printf("remove: end while loop\n");
+
         acquire(&pred->next_lock);
         acquire(&curr->next_lock);
-        printf("remove: after acquire\n");
         if (validate(pred, curr, list_index)) {
-            printf("remove: after validate\n");
             if (curr == item) {
                 pred->next = curr->next;
                 release(&pred->next_lock);
@@ -83,36 +105,29 @@ int remove(struct proc *item, int list_index) {
 }
 
 int add(struct proc *item, int list_index) {
+    printf("add: proc index: %d\n", item - proc);
     while (1) {
-        printf("add: \n");
         struct proc *pred = &lists_heads[list_index];
-        acquire(&pred->next_lock);
-        // acquire(&item->next_lock); //todo check if needs to acquire the added item
+        if (list_index == 2) //if remove from runnable then go to cpu list
+            pred = &runnable_heads[get_cpu()];
 
-        printf("add: after acquire\n");
-        printf("add: pred->next is: %d\n", pred->next);
-        printf("add: pred location is: %d\n", item - proc);
+        acquire(&pred->next_lock);
 
         if(pred->next == -1) {
-            printf("add: inside if p->next == -1\n");
             pred->next = item - proc;  //a -> b // item-proc gives the item's index
             item->next = -1; // b->END_OF_LIST
             release(&pred->next_lock);
-//            release(&item->next_lock);
             return 1;
-            //create next proc
+        //create next proc
         } else{
-            printf("add: inside else\n");
             struct proc *curr = &proc[pred->next];
             acquire(&curr->next_lock);
-            printf("add: after second acquire\n");
 
             if (validate(pred, curr, list_index)) {
+                item->next = pred->next; // b->c
                 pred->next = item - proc; //a -> b
-                item->next = curr->next; // b->c
                 release(&pred->next_lock);
                 release(&curr->next_lock);
-//                release(&item->next_lock);
 
                 return 1;
             }
@@ -140,12 +155,26 @@ proc_mapstacks(pagetable_t kpgtbl) {
 void
 procinit(void) {
     struct proc *p;
-
     //init all the locks of the lists's head
-    for (p = proc; p < &lists_heads[5]; p++) {
+    for (p = lists_heads; p < &lists_heads[5]; p++) {
         initlock(&p->lock, "proc");
         initlock(&p-> next_lock, "next_lock"); //init next_lock
+        acquire(&p->next_lock);
+        p->next = -1;
+        release(&p->next_lock);
         p->kstack = KSTACK((int) (p - proc));
+    }
+
+    //init runnable list for each cpu
+    struct cpu *c;
+    for (c = cpus; c < &cpus[NCPU]; c++){
+        c->runnable_head = &runnable_heads[c-cpus];
+        struct proc *head = c->runnable_head;
+        initlock(&head->lock, "lock");
+        initlock(&head->next_lock, "next_lock");
+        acquire(&head->next_lock);
+        head->next = -1;
+        release(&head->next_lock);
     }
 
     initlock(&pid_lock, "nextpid");
@@ -154,8 +183,8 @@ procinit(void) {
         initlock(&p->lock, "proc");
         initlock(&p-> next_lock, "next_lock"); //init next_lock
         p->kstack = KSTACK((int) (p - proc));
+        add(p, 1); //add all the processes to Unused list at init
     }
-
 }
 
 // Must be called with interrupts disabled,
@@ -255,9 +284,11 @@ allocproc(void) {
 // p->lock must be held.
 static void
 freeproc(struct proc *p) {
-    //remove from zombie list or from nowhere
-    if(p-> state == ZOMBIE)
+    //remove from zombie list and add to unused
+    if(p-> state == ZOMBIE){
         remove(p, 4);
+        add(p, 1);
+    }
 
     if (p->trapframe)
         kfree((void *) p->trapframe);
@@ -272,9 +303,6 @@ freeproc(struct proc *p) {
     p->chan = 0;
     p->killed = 0;
     p->xstate = 0;
-
-    // add to unused list
-    add(p, 1);
     p->state = UNUSED;
 
 }
@@ -425,7 +453,7 @@ fork(void) {
 
     acquire(&np->lock);
     // remove from unused list and add to runnable
-    remove(np, 1); //todo check the problem!!
+    remove(np, 1);
     add(np, 2);
 
     np->state = RUNNABLE;
@@ -483,6 +511,10 @@ exit(int status) {
     acquire(&p->lock);
 
     p->xstate = status;
+    //todo
+    //remove from running list and add to zombie list
+    remove(p, 0);
+    add(p, 4);
     p->state = ZOMBIE;
 
     release(&wait_lock);
@@ -563,10 +595,10 @@ scheduler(void) {
                 // Switch to chosen process.  It is the process's job
                 // to release its lock and then reacquire it
                 // before jumping back to us.
-
+                //todo
                 //remove from Runnable list and add to Running list
-//                remove(p, 2);
-//                add(p, 0);
+                remove(p, 2);
+                add(p, 0);
 
                 p->state = RUNNING;
                 c->proc = p;
@@ -614,6 +646,10 @@ void
 yield(void) {
     struct proc *p = myproc();
     acquire(&p->lock);
+    //todo
+    //remove from Running list and add to runnable
+    remove(p, 0);
+    add(p, 2);
     p->state = RUNNABLE;
     sched();
     release(&p->lock);
@@ -644,7 +680,6 @@ forkret(void) {
 void
 sleep(void *chan, struct spinlock *lk) {
     struct proc *p = myproc();
-
     // Must acquire p->lock in order to
     // change p->state and then call sched.
     // Once we hold p->lock, we can be
@@ -654,12 +689,17 @@ sleep(void *chan, struct spinlock *lk) {
 
     acquire(&p->lock);  //DOC: sleeplock1
     release(lk);
+    //todo
+    //remove from running list and add to sleeping list
+    remove(p, 0);
+    add(p, 3);
 
     // Go to sleep.
     p->chan = chan;
     p->state = SLEEPING;
 
     sched();
+
 
     // Tidy up.
     p->chan = 0;
@@ -679,6 +719,10 @@ wakeup(void *chan) {
         if (p != myproc()) {
             acquire(&p->lock);
             if (p->state == SLEEPING && p->chan == chan) {
+                //todo
+                //remove from sleeping and add to runnable
+                remove(p, 3);
+                add(p, 2);
                 p->state = RUNNABLE;
             }
             release(&p->lock);
@@ -691,6 +735,7 @@ wakeup(void *chan) {
 // to user space (see usertrap() in trap.c).
 int
 kill(int pid) {
+    printf("kill\n");
     struct proc *p;
 
     for (p = proc; p < &proc[NPROC]; p++) {
@@ -698,6 +743,10 @@ kill(int pid) {
         if (p->pid == pid) {
             p->killed = 1;
             if (p->state == SLEEPING) {
+                //todo
+                //remove from sleeping and add to runnable
+                remove(p, 3);
+                add(p, 2);
                 // Wake process from sleep().
                 p->state = RUNNABLE;
             }
@@ -706,6 +755,7 @@ kill(int pid) {
         }
         release(&p->lock);
     }
+    printf("end kill\n");
     return -1;
 }
 
@@ -770,5 +820,7 @@ int set_cpu(int cpu_num) {
 }
 
 int get_cpu() {
-    return cpuid(); //todo check!!!!
+    printf("cpu index: %d\n", mycpu()-cpus);
+    return mycpu() - cpus; //todo check!!!!
 }
+
