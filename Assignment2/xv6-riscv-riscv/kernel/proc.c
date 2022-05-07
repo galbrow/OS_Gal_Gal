@@ -20,7 +20,7 @@ struct proc lists_heads[5];
 
 //runnable lists for each cpu
 struct proc runnable_heads[NCPU];
-
+uint64 cpu_capacity_counter[NCPU];
 //end
 
 struct proc *initproc;
@@ -57,7 +57,6 @@ void printList(struct proc *head){
 
 //validate
 int validate(struct proc *pred, struct proc *curr, int list_index) {
-//    printf("validate\n");
     struct proc *node = &lists_heads[list_index];
     if (list_index == 2) //if remove from runnable then go to cpu list
         node = &runnable_heads[get_cpu()];
@@ -167,6 +166,33 @@ int remove_first_in_line(int list_index){
         release(&curr->next_lock);
     }
 }
+
+int find_max_index(){
+   int max_index = -1;
+   uint64 max_value = -1;
+   int i;
+   for (i = 0; i<NCPU; i++){
+       if(cpu_capacity_counter[i] > max_value){
+           max_index = i;
+           max_value = cpu_capacity_counter[i];
+       }
+   }
+   return max_index;
+}
+
+int find_min_index(){
+    int min_index = -1;
+    uint64 min_value = -1;
+    int i;
+    for (i = 0; i<NCPU; i++){ //TODO: check if need to replace NCPU to the number of working cpus
+        if(cpu_capacity_counter[i] <= min_value){
+            min_index = i;
+            min_value = cpu_capacity_counter[i];
+        }
+    }
+    return min_index;
+}
+
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -497,11 +523,21 @@ fork(void) {
     release(&wait_lock);
 
     acquire(&np->lock);
+    int cpu_to_move = get_cpu();
+
+#ifdef ON
+cpu_to_move = find_min_index()
+#endif
+
     // remove from unused list and add to runnable
     if(remove(np, 1) ==1)
-        add(np, 2, get_cpu()); //TODO: check that get_cpu return the father's cpu id
+        add(np, 2, cpu_to_move);
 
 
+//    printf("fork: father's cpu: %d\n", p->cpu);
+//    printf("fork: son's cpu: %d\n", np->cpu);
+//    printf("fork: get_cpu() is %d\n", get_cpu());
+//    printList(&runnable_heads[p->cpu]);
 
     np->state = RUNNABLE;
     release(&np->lock);
@@ -740,7 +776,8 @@ sleep(void *chan, struct spinlock *lk) {
     //remove from running list and add to sleeping list
     if(remove(p, 0) == 1)
         add(p, 3, -1);
-
+//    printf("sleep: proc index: %d, cpu: %d\n", p-proc, p->cpu);
+//    printList(&lists_heads[3]);
     // Go to sleep.
     p->chan = chan;
     p->state = SLEEPING;
@@ -770,6 +807,8 @@ wakeup(void *chan) {
                 //remove from sleeping and add to runnable
                 if(remove(p, 3) == 1)
                     add(p, 2, p->cpu);
+//                printf("wakeup process index: %d, cpu: %d\n", p-proc, p->cpu);
+//                printList(&runnable_heads[p->cpu]);
                 p->state = RUNNABLE;
             }
             release(&p->lock);
@@ -782,7 +821,6 @@ wakeup(void *chan) {
 // to user space (see usertrap() in trap.c).
 int
 kill(int pid) {
-    printf("kill\n");
     struct proc *p;
 
     for (p = proc; p < &proc[NPROC]; p++) {
@@ -798,7 +836,6 @@ kill(int pid) {
         }
         release(&p->lock);
     }
-    printf("end kill\n");
     return -1;
 }
 
@@ -866,7 +903,7 @@ int set_cpu(int cpu_num) {
     add(p, 2, cpu_num);
     p-> cpu = cpu_num;
     yield();
-    return cpu_num; //todo impl
+    return cpu_num;
 }
 
 int get_cpu() {
@@ -875,3 +912,7 @@ int get_cpu() {
     return mycpu() - cpus; //todo check!!!!
 }
 
+int cpu_process_count(int cpu_num){
+    //TODO: check fail scenario
+    return cpu_capacity_counter[cpu_num];
+}

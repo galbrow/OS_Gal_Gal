@@ -110,3 +110,11 @@ sys_set_cpu(void)
         return -1;
     return set_cpu(cpu_num);
 }
+
+uint64
+sys_cpu_process_count(void){
+    int cpu_num;
+    if(argint(0, &cpu_num) < 0)
+        return -1;
+    return cpu_process_count(cpu_num);
+}

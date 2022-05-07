@@ -186,6 +186,9 @@ void            virtio_disk_intr(void);
 int             set_cpu(int);
 int             get_cpu(void);
 
+//for section 4.2.1
+int             cpu_process_count(int);
+
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
 
