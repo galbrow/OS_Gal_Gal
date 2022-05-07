@@ -9,7 +9,7 @@
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
-
+int max_cpu_index = 0;
 //beginning
 struct proc lists_heads[5];
 //0= running_head; // Dummy link to the index of the first node in the list. if the list is empty it holds -1
@@ -29,9 +29,8 @@ int nextpid = 1;
 struct spinlock pid_lock;
 
 extern void forkret(void);
-
+int decrement_cpu(int cpu_index);
 static void freeproc(struct proc *p);
-
 extern char trampoline[]; // trampoline.S
 extern uint64 cas(volatile void *addr, int expected, int newval);
 
@@ -44,9 +43,7 @@ struct spinlock wait_lock;
 void printList(struct proc *head){
     printf("------------------------------Printlist----------------------------------- \n");
     while(head->next != -1){
-//        printf("Proc address: %x\n", head);
         printf("Proc index in proc arr: %d\n", head - proc);
-//        printf("Proc->next %d\n", head.next);
         head = &proc[head->next];
     }
     printf("Proc index in proc arr: %d\n", head - proc);
@@ -61,9 +58,7 @@ int validate(struct proc *pred, struct proc *curr, int list_index) {
     if (list_index == 2) //if remove from runnable then go to cpu list
         node = &runnable_heads[get_cpu()];
     while (node->next != -1) { // while I'm not the last node in the list
-//        printf("node->next %d\n", node->next);
         if (node == pred) {// Node pred still accessible
-//            printf("inside if\n");
             return &proc[pred->next] == curr; }// Node pred.next still successor to curr
         node = &proc[node->next];
     }
@@ -73,7 +68,6 @@ int validate(struct proc *pred, struct proc *curr, int list_index) {
 
 // Remove
 int remove(struct proc *item, int list_index) {
-//    printf("remove: proc index: %d from list num: %d\n", item - proc, list_index);
     while (1) {
         struct proc *pred = &lists_heads[list_index];
         if (list_index == 2) //if remove from runnable then go to cpu list
@@ -104,7 +98,6 @@ int remove(struct proc *item, int list_index) {
 }
 
 int add(struct proc *item, int list_index, int cpu_num) {
-//    printf("add: proc index: %d to list num: %d\n", item - proc, list_index);
     while (1) {
         struct proc *pred = &lists_heads[list_index];
         if (list_index == 2){//if remove from runnable then go to cpu list
@@ -137,14 +130,9 @@ int add(struct proc *item, int list_index, int cpu_num) {
     }
 }
 
-int remove_first_in_line(int list_index){
-//    printf("remove first in line\n");
-//    printList(&lists_heads[list_index]);
+int remove_first_in_line(int cpu_to_steal){
     while (1) {
-        struct proc *pred = &lists_heads[list_index];
-        if (list_index == 2) //if remove from runnable then go to cpu list
-            pred = &runnable_heads[get_cpu()];
-
+        struct proc *pred = &runnable_heads[cpu_to_steal];
         struct proc *curr = &proc[pred->next];
         if(pred->next == -1) //if line is empty
             return -1;
@@ -156,8 +144,9 @@ int remove_first_in_line(int list_index){
 
         acquire(&pred->next_lock);
         acquire(&curr->next_lock);
-        if (validate(pred, curr, list_index)) {
+        if (validate(pred, curr, 2)) {
             pred->next = curr->next; //curr->next is -1
+            decrement_cpu(cpu_to_steal);
             release(&pred->next_lock);
             release(&curr->next_lock);
             return curr - proc;
@@ -167,32 +156,37 @@ int remove_first_in_line(int list_index){
     }
 }
 
-int find_max_index(){
-   int max_index = -1;
-   uint64 max_value = -1;
-   int i;
-   for (i = 0; i<NCPU; i++){
-       if(cpu_capacity_counter[i] > max_value){
-           max_index = i;
-           max_value = cpu_capacity_counter[i];
-       }
-   }
-   return max_index;
-}
+
 
 int find_min_index(){
     int min_index = -1;
     uint64 min_value = -1;
     int i;
-    for (i = 0; i<NCPU; i++){ //TODO: check if need to replace NCPU to the number of working cpus
-        if(cpu_capacity_counter[i] <= min_value){
+    for (i = 0; i<=max_cpu_index; i++){
+        if(cpu_process_count(i) <= min_value){
             min_index = i;
-            min_value = cpu_capacity_counter[i];
+            min_value = cpu_process_count(i);
         }
     }
     return min_index;
 }
 
+void increment_cpu(int cpu_index){
+    int old;
+    do {
+        old = cpu_process_count(cpu_index);
+    } while (cas(&cpu_capacity_counter[cpu_index], old, old + 1));
+}
+
+//decrement cpu is used to find a cpu with processes in it's q
+int decrement_cpu(int cpu_index){
+    int old;
+    do {
+        if(cpu_process_count(cpu_index) <= 0) return -1;
+        old = cpu_process_count(cpu_index);
+    } while (cas(&cpu_capacity_counter[cpu_index], old, old - 1));
+    return 0;
+}
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -244,19 +238,6 @@ procinit(void) {
         p->kstack = KSTACK((int) (p - proc));
         add(p, 1, -1); //add all the processes to Unused list at init
     }
-
-//    printf("printlist: 0\n");
-//    printList(&lists_heads[1]);
-//    printf("remove 60 from the list\n");
-//    remove(&proc[60], 1);
-//    printList(&lists_heads[1]);
-//    printf("add 60\n");
-//    add(&proc[60], 1);
-//    printList(&lists_heads[1]);
-//    printf("remove first in line\n");
-//    remove_first_in_line(1);
-//    printList(&lists_heads[1]);
-
 }
 
 // Must be called with interrupts disabled,
@@ -286,15 +267,6 @@ myproc(void) {
     pop_off();
     return p;
 }
-
-//1 i n t count e r = 0 ;
-//2 i n t increment ( ) {
-//    3 i n t old ;
-//    4 do {
-//        5 old = count e r ;
-//        6 } whi l e ( cas (&counter , old , old+1) ) ;
-//    7 r e turn old ;
-//    8 }
 
 int
 allocpid() {
@@ -453,8 +425,8 @@ userinit(void) {
 
     // remove from unused list and add to runnable
     if(remove(p, 1) == 1)
-        add(p, 2, 0); //TODO: check -> add the proc to the first cpu list (0)
-
+        add(p, 2, 0); // user init uses the first cpu (index 0)
+    increment_cpu(0);
     p->state = RUNNABLE;
 
     release(&p->lock);
@@ -525,19 +497,14 @@ fork(void) {
     acquire(&np->lock);
     int cpu_to_move = get_cpu();
 
-#ifdef ON
-cpu_to_move = find_min_index()
-#endif
+    #ifdef ON
+    cpu_to_move = find_min_index();
+    #endif
 
     // remove from unused list and add to runnable
     if(remove(np, 1) ==1)
         add(np, 2, cpu_to_move);
-
-
-//    printf("fork: father's cpu: %d\n", p->cpu);
-//    printf("fork: son's cpu: %d\n", np->cpu);
-//    printf("fork: get_cpu() is %d\n", get_cpu());
-//    printList(&runnable_heads[p->cpu]);
+    increment_cpu(cpu_to_move);
 
     np->state = RUNNABLE;
     release(&np->lock);
@@ -594,7 +561,7 @@ exit(int status) {
     acquire(&p->lock);
 
     p->xstate = status;
-    //todo
+
     //remove from running list and add to zombie list
     if(remove(p, 0) == 1)
         add(p, 4, -1);
@@ -655,6 +622,8 @@ wait(uint64 addr) {
     }
 }
 
+
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -666,25 +635,43 @@ void
 scheduler(void) {
     struct proc *p;
     struct cpu *c = mycpu();
-//    int cpu_num = c- cpus;
 
+    if(get_cpu()> max_cpu_index)
+        max_cpu_index = get_cpu();
     c->proc = 0;
     for (;;) {
         // Avoid deadlock by ensuring that devices can interrupt.
         intr_on();
-        int p_index = remove_first_in_line(2);
-        if(p_index == -1)
+        int cpu = get_cpu();
+        int p_index = remove_first_in_line(cpu);
+
+        if(p_index == -1) {
+        #ifdef ON
+            int i;
+            for(i =0; i<max_cpu_index; i++){
+                p_index = remove_first_in_line(i);
+                if(p_index != -1){ // we stole from cpu i
+                    cpu = i;
+                    break;
+                }
+            }
+            if(p_index == -1) // after iteration, we didn't find process to steal
+                continue;
+        #elif OFF
             continue;
+        #endif
+        } //close big if
+
         p = &proc[p_index];
         acquire(&p->lock);
         if (p->state == RUNNABLE) {
             // Switch to chosen process.  It is the process's job
             // to release its lock and then reacquire it
             // before jumping back to us.
-            //todo
+
             //add to Running list
-            add(p, 0, -1); //todo remove
-            p->cpu = get_cpu();
+            add(p, 0, -1);
+            p->cpu = cpu;
             p->state = RUNNING;
             c->proc = p;
             swtch(&c->context, &p->context);
@@ -729,10 +716,10 @@ void
 yield(void) {
     struct proc *p = myproc();
     acquire(&p->lock);
-    //todo
+
     //remove from Running list and add to runnable
     if(remove(p, 0) == 1)
-        add(p, 2, get_cpu()); //TODO: check
+        add(p, 2, get_cpu());
     p->state = RUNNABLE;
     sched();
     release(&p->lock);
@@ -772,12 +759,11 @@ sleep(void *chan, struct spinlock *lk) {
 
     acquire(&p->lock);  //DOC: sleeplock1
     release(lk);
-    //todo
+
     //remove from running list and add to sleeping list
     if(remove(p, 0) == 1)
         add(p, 3, -1);
-//    printf("sleep: proc index: %d, cpu: %d\n", p-proc, p->cpu);
-//    printList(&lists_heads[3]);
+
     // Go to sleep.
     p->chan = chan;
     p->state = SLEEPING;
@@ -803,12 +789,15 @@ wakeup(void *chan) {
         if (p != myproc()) {
             acquire(&p->lock);
             if (p->state == SLEEPING && p->chan == chan) {
-                //todo
+
+                #ifdef ON
+                p->cpu = find_min_index();
+                #endif
                 //remove from sleeping and add to runnable
                 if(remove(p, 3) == 1)
                     add(p, 2, p->cpu);
-//                printf("wakeup process index: %d, cpu: %d\n", p-proc, p->cpu);
-//                printList(&runnable_heads[p->cpu]);
+
+                increment_cpu(p->cpu);
                 p->state = RUNNABLE;
             }
             release(&p->lock);
@@ -907,9 +896,7 @@ int set_cpu(int cpu_num) {
 }
 
 int get_cpu() {
-//    printf("mycpu: %d\n", mycpu());
-//    printf("cpu index: %d\n", mycpu()-cpus);
-    return mycpu() - cpus; //todo check!!!!
+    return mycpu() - cpus;
 }
 
 int cpu_process_count(int cpu_num){

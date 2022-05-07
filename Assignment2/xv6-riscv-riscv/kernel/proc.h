@@ -108,9 +108,9 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   //pointer to index of the next node in the list
-  volatile int next; //todo check volatile
+  volatile int next; //volatile is needed because we read the next field without lock
   struct spinlock next_lock;
 
-  //holds the cpu index TODO: check if needs lock
+  //holds the cpu index
   int cpu;
 };
