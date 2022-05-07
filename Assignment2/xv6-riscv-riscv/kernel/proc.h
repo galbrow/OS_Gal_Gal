@@ -110,4 +110,7 @@ struct proc {
   //pointer to index of the next node in the list
   volatile int next; //todo check volatile
   struct spinlock next_lock;
+
+  //holds the cpu index TODO: check if needs lock
+  int cpu;
 };
