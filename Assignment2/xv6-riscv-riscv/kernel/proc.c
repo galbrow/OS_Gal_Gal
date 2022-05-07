@@ -900,6 +900,5 @@ int get_cpu() {
 }
 
 int cpu_process_count(int cpu_num){
-    //TODO: check fail scenario
     return cpu_capacity_counter[cpu_num];
 }
