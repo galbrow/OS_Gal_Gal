@@ -1,0 +1,11 @@
+diff --git a/Assignment2/xv6-riscv-riscv/kernel/proc.c b/Assignment2/xv6-riscv-riscv/kernel/proc.c
+index 264c57e..9d07bc1 100644
+--- a/Assignment2/xv6-riscv-riscv/kernel/proc.c
++++ b/Assignment2/xv6-riscv-riscv/kernel/proc.c
+@@ -900,6 +900,5 @@ int get_cpu() {
+ }
+ 
+ int cpu_process_count(int cpu_num){
+-    //TODO: check fail scenario
+     return cpu_capacity_counter[cpu_num];
+ }
