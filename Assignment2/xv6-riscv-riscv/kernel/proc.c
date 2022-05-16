@@ -85,12 +85,12 @@ int remove(struct proc *item, int list_index) {
         if (validate(pred, curr, list_index)) {
             if (curr == item) {
                 pred->next = curr->next;
-                release(&pred->next_lock);
                 release(&curr->next_lock);
+                release(&pred->next_lock);
                 return 1;
             } else {
-                release(&pred->next_lock);
                 release(&curr->next_lock);
+                release(&pred->next_lock);
                 return 0;
             }
         }
@@ -122,10 +122,12 @@ int add(struct proc *item, int list_index, int cpu_num) {
             if (validate(pred, curr, list_index)) {
                 item->next = pred->next; // b->c
                 pred->next = item - proc; //a -> b
-                release(&pred->next_lock);
                 release(&curr->next_lock);
+                release(&pred->next_lock);
                 return 1;
             }
+            release(&curr->next_lock);
+            release(&pred->next_lock);
         }
     }
 }
@@ -818,6 +820,8 @@ kill(int pid) {
             p->killed = 1;
             if (p->state == SLEEPING) {
                 // Wake process from sleep().
+                if(remove(p, 3) == 1)
+                    add(p, 2, get_cpu());
                 p->state = RUNNABLE;
             }
             release(&p->lock);
