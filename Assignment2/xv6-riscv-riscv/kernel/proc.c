@@ -184,7 +184,7 @@ void increment_cpu(int cpu_index){
 int decrement_cpu(int cpu_index){
     int old;
     do {
-        if(cpu_process_count(cpu_index) <= 0) return -1;
+        if(cpu_process_count(cpu_index) <= 0) printf("\n\n----------------------------problem decrement-------------------------\n\n");
         old = cpu_process_count(cpu_index);
     } while (cas(&cpu_capacity_counter[cpu_index], old, old - 1));
     return 0;
@@ -426,9 +426,10 @@ userinit(void) {
     p->cwd = namei("/");
 
     // remove from unused list and add to runnable
-    if(remove(p, 1) == 1)
+    if(remove(p, 1) == 1) {
         add(p, 2, 0); // user init uses the first cpu (index 0)
-    increment_cpu(0);
+        increment_cpu(0);
+    }
     p->state = RUNNABLE;
 
     release(&p->lock);
@@ -504,10 +505,10 @@ fork(void) {
     #endif
 
     // remove from unused list and add to runnable
-    if(remove(np, 1) ==1)
+    if(remove(np, 1) ==1) {
         add(np, 2, cpu_to_move);
-    increment_cpu(cpu_to_move);
-
+        increment_cpu(cpu_to_move);
+    }
     np->state = RUNNABLE;
     release(&np->lock);
 
@@ -646,7 +647,6 @@ scheduler(void) {
         intr_on();
         int cpu = get_cpu();
         int p_index = remove_first_in_line(cpu);
-
         if(p_index == -1) {
         #ifdef ON
             int i;
@@ -663,7 +663,6 @@ scheduler(void) {
             continue;
         #endif
         } //close big if
-
         p = &proc[p_index];
         acquire(&p->lock);
         if (p->state == RUNNABLE) {
@@ -720,8 +719,10 @@ yield(void) {
     acquire(&p->lock);
 
     //remove from Running list and add to runnable
-    if(remove(p, 0) == 1)
+    if(remove(p, 0) == 1) {
         add(p, 2, get_cpu());
+        increment_cpu(get_cpu());
+    }
     p->state = RUNNABLE;
     sched();
     release(&p->lock);
@@ -796,10 +797,11 @@ wakeup(void *chan) {
                 p->cpu = find_min_index();
                 #endif
                 //remove from sleeping and add to runnable
-                if(remove(p, 3) == 1)
+                if(remove(p, 3) == 1) {
                     add(p, 2, p->cpu);
+                    increment_cpu(p->cpu);
+                }
 
-                increment_cpu(p->cpu);
                 p->state = RUNNABLE;
             }
             release(&p->lock);
@@ -820,8 +822,10 @@ kill(int pid) {
             p->killed = 1;
             if (p->state == SLEEPING) {
                 // Wake process from sleep().
-                if(remove(p, 3) == 1)
+                if(remove(p, 3) == 1) {
                     add(p, 2, get_cpu());
+                    increment_cpu(get_cpu());
+                }
                 p->state = RUNNABLE;
             }
             release(&p->lock);

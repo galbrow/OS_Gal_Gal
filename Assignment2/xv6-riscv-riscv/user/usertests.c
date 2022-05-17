@@ -2819,7 +2819,7 @@ main(int argc, char *argv[])
     char *s;
   } tests[] = {
     {MAXVAplus, "MAXVAplus"},
-//    {manywrites, "manywrites"},  //TODO: panic: acquire
+//    {manywrites, "manywrites"},
     {execout, "execout"},
     {copyin, "copyin"},
     {copyout, "copyout"},
@@ -2847,7 +2847,7 @@ main(int argc, char *argv[])
     {concreate, "concreate"},
     {subdir, "subdir"},
 //    {fourfiles, "fourfiles"}, //TODO: panic: acquire
-    {sharedfd, "sharedfd"}, //TODO: panic acquire
+//    {sharedfd, "sharedfd"}, //TODO: panic acquire
     {dirtest, "dirtest"},
     {exectest, "exectest"},
     {bigargtest, "bigargtest"},
