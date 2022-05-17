@@ -21,7 +21,6 @@ forktest(void)
   print("fork test\n");
 
   for(n=0; n<N; n++){
-    print("fork loop\n");
     pid = fork();
     if(pid < 0){
         print("pid < 0\n");

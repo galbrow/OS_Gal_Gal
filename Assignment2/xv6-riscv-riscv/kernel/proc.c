@@ -106,8 +106,7 @@ int add(struct proc *item, int list_index, int cpu_num) {
             else
                 pred = &runnable_heads[cpu_num];
         }
-        if(holding(&pred->next_lock) && cpu_num == 1)
-            printf("holding before big if\n");
+
         acquire(&pred->next_lock);
 
         if(pred->next == -1) {
@@ -150,12 +149,12 @@ int remove_first_in_line(int cpu_to_steal){
         if (validate(pred, curr, 2, cpu_to_steal)) {
             pred->next = curr->next; //curr->next is -1
             decrement_cpu(cpu_to_steal);
-            release(&pred->next_lock);
             release(&curr->next_lock);
+            release(&pred->next_lock);
             return curr - proc;
         }
-        release(&pred->next_lock);
         release(&curr->next_lock);
+        release(&pred->next_lock);
     }
 }
 
@@ -163,7 +162,7 @@ int remove_first_in_line(int cpu_to_steal){
 
 int find_min_index(){
     int min_index = -1;
-    uint64 min_value = -1;
+    uint64 min_value = NPROC+1;
     int i;
     for (i = 0; i<=max_cpu_index; i++){
         if(cpu_process_count(i) <= min_value){
@@ -185,7 +184,6 @@ void increment_cpu(int cpu_index){
 int decrement_cpu(int cpu_index){
     int old;
     do {
-        if(cpu_process_count(cpu_index) <= 0) printf("\n\n----------------------------problem decrement-------------------------\n\n");
         old = cpu_process_count(cpu_index);
     } while (cas(&cpu_capacity_counter[cpu_index], old, old - 1));
     return 0;
@@ -462,7 +460,7 @@ fork(void) {
     int i, pid;
     struct proc *np;
     struct proc *p = myproc();
-//    printf("fork: p->cpu: %d\n",p->cpu);
+
     // Allocate process.
     if ((np = allocproc()) == 0) {
         return -1;
@@ -502,26 +500,17 @@ fork(void) {
     int cpu_to_move = get_cpu();
 
     #ifdef ON
-//    printf("fork: inside ifdef\n");
     cpu_to_move = find_min_index();
-//    printf("fork: cpu_to_move = %d\n", cpu_to_move);
     #endif
 
-//    printf("fork: cpu_counter: %d\n", cpu_capacity_counter[cpu_to_move]);
 
 
     // remove from unused list and add to runnable
     if(remove(np, 1) ==1) {
-//        printf("fork: after remove\n");
-//        printf("fork: cpu_counter: %d\n", cpu_capacity_counter[cpu_to_move]);
-
         add(np, 2, cpu_to_move);
-//        printf("fork: after add\n");
         increment_cpu(cpu_to_move);
-//        printf("fork: after increment\n");
 
     }
-//    printf("fork: cpu_counter: %d\n", cpu_capacity_counter[cpu_to_move]);
 
     np->state = RUNNABLE;
     release(&np->lock);
