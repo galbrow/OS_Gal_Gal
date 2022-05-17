@@ -53,10 +53,10 @@ void printList(struct proc *head){
 
 
 //validate
-int validate(struct proc *pred, struct proc *curr, int list_index) {
+int validate(struct proc *pred, struct proc *curr, int list_index, int cpu_num) {
     struct proc *node = &lists_heads[list_index];
     if (list_index == 2) //if remove from runnable then go to cpu list
-        node = &runnable_heads[get_cpu()];
+        node = &runnable_heads[cpu_num];
     while (node->next != -1) { // while I'm not the last node in the list
         if (node == pred) {// Node pred still accessible
             return &proc[pred->next] == curr; }// Node pred.next still successor to curr
@@ -82,7 +82,7 @@ int remove(struct proc *item, int list_index) {
 
         acquire(&pred->next_lock);
         acquire(&curr->next_lock);
-        if (validate(pred, curr, list_index)) {
+        if (validate(pred, curr, list_index, get_cpu())) {
             if (curr == item) {
                 pred->next = curr->next;
                 release(&curr->next_lock);
@@ -106,7 +106,8 @@ int add(struct proc *item, int list_index, int cpu_num) {
             else
                 pred = &runnable_heads[cpu_num];
         }
-
+        if(holding(&pred->next_lock) && cpu_num == 1)
+            printf("holding before big if\n");
         acquire(&pred->next_lock);
 
         if(pred->next == -1) {
@@ -118,8 +119,8 @@ int add(struct proc *item, int list_index, int cpu_num) {
         } else{
             struct proc *curr = &proc[pred->next];
             acquire(&curr->next_lock);
+            if (validate(pred, curr, list_index, cpu_num)) {
 
-            if (validate(pred, curr, list_index)) {
                 item->next = pred->next; // b->c
                 pred->next = item - proc; //a -> b
                 release(&curr->next_lock);
@@ -146,7 +147,7 @@ int remove_first_in_line(int cpu_to_steal){
 
         acquire(&pred->next_lock);
         acquire(&curr->next_lock);
-        if (validate(pred, curr, 2)) {
+        if (validate(pred, curr, 2, cpu_to_steal)) {
             pred->next = curr->next; //curr->next is -1
             decrement_cpu(cpu_to_steal);
             release(&pred->next_lock);
@@ -461,7 +462,7 @@ fork(void) {
     int i, pid;
     struct proc *np;
     struct proc *p = myproc();
-
+//    printf("fork: p->cpu: %d\n",p->cpu);
     // Allocate process.
     if ((np = allocproc()) == 0) {
         return -1;
@@ -501,14 +502,27 @@ fork(void) {
     int cpu_to_move = get_cpu();
 
     #ifdef ON
+//    printf("fork: inside ifdef\n");
     cpu_to_move = find_min_index();
+//    printf("fork: cpu_to_move = %d\n", cpu_to_move);
     #endif
+
+//    printf("fork: cpu_counter: %d\n", cpu_capacity_counter[cpu_to_move]);
+
 
     // remove from unused list and add to runnable
     if(remove(np, 1) ==1) {
+//        printf("fork: after remove\n");
+//        printf("fork: cpu_counter: %d\n", cpu_capacity_counter[cpu_to_move]);
+
         add(np, 2, cpu_to_move);
+//        printf("fork: after add\n");
         increment_cpu(cpu_to_move);
+//        printf("fork: after increment\n");
+
     }
+//    printf("fork: cpu_counter: %d\n", cpu_capacity_counter[cpu_to_move]);
+
     np->state = RUNNABLE;
     release(&np->lock);
 
@@ -761,11 +775,13 @@ sleep(void *chan, struct spinlock *lk) {
     // so it's okay to release lk.
 
     acquire(&p->lock);  //DOC: sleeplock1
-    release(lk);
 
     //remove from running list and add to sleeping list
     if(remove(p, 0) == 1)
         add(p, 3, -1);
+
+    release(lk);
+
 
     // Go to sleep.
     p->chan = chan;
