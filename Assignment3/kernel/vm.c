@@ -14,6 +14,7 @@ pagetable_t kernel_pagetable;
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
+//extern int cow_handle(pagetable_t,uint64);
 
 // Make a direct-map page table for the kernel.
 pagetable_t
@@ -300,31 +301,31 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
-  pte_t *pte;
-  uint64 pa, i;
-  uint flags;
-  char *mem;
+    pte_t *pte;
+    uint64 va, pa;
 
-  for(i = 0; i < sz; i += PGSIZE){
-    if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
-    if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
-    pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
+    for (va = 0; va < sz; va += PGSIZE) {
+
+        if ((pte = walk(old, va, 0)) == 0)
+            panic("uvmcopy: pte should exist");
+        if((*pte & PTE_V) == 0)
+            panic("uvmcopy: page not present");
+
+        pa = PTE2PA(*pte);
+
+        if (*pte & PTE_W)
+            *pte = (*pte | PTE_COW) & ~PTE_W;
+
+        if(mappages(new, va, PGSIZE, pa, (uint)PTE_FLAGS(*pte)) < 0)
+            goto err;
+
+        reference_add(pa);
     }
-  }
-  return 0;
+    return 0;
 
- err:
-  uvmunmap(new, 0, i / PGSIZE, 1);
-  return -1;
+    err:
+    uvmunmap(new, 0, va / PGSIZE, 1);
+    return -1;
 }
 
 // mark a PTE invalid for user access.
@@ -350,6 +351,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    if (cow_handle(pagetable, va0) < 0)
+          return -1;
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;

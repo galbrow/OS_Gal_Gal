@@ -15,6 +15,9 @@ extern char trampoline[], uservec[], userret[];
 void kernelvec();
 
 extern int devintr();
+extern pte_t *walk(pagetable_t pagetable, uint64 va, int alloc);
+
+int cow_handle(pagetable_t pagetable, uint64 va);
 
 void
 trapinit(void)
@@ -50,21 +53,26 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
-  if(r_scause() == 8){
-    // system call
+  if(r_scause() == 8) {
+      // system call
 
-    if(p->killed)
-      exit(-1);
+      if (p->killed)
+          exit(-1);
 
-    // sepc points to the ecall instruction,
-    // but we want to return to the next instruction.
-    p->trapframe->epc += 4;
+      // sepc points to the ecall instruction,
+      // but we want to return to the next instruction.
+      p->trapframe->epc += 4;
 
-    // an interrupt will change sstatus &c registers,
-    // so don't enable until done with those registers.
-    intr_on();
+      // an interrupt will change sstatus &c registers,
+      // so don't enable until done with those registers.
+      intr_on();
 
-    syscall();
+      syscall();
+  }else if (r_scause() == 13 || r_scause() == 15) {
+
+      uint64 va = r_stval();
+      if (va >= p->sz || cow_handle(p->pagetable, va) != 0)
+          p->killed = 1;
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
@@ -216,5 +224,35 @@ devintr()
   } else {
     return 0;
   }
+}
+
+int
+cow_handle(pagetable_t pagetable, uint64 va)
+{
+    va = PGROUNDDOWN(va);
+
+    if(va >= MAXVA)
+        return -1;
+
+    pte_t *pte;
+    if ((pte = walk(pagetable, va, 0)) == 0)
+        return -1;
+    if ((*pte & PTE_V) == 0)
+        return -1;
+
+    if ((*pte & PTE_COW) == 0)
+        return 1;
+
+    char *n_pa;
+    if ((n_pa = kalloc()) != 0) {
+        uint64 pa = PTE2PA(*pte);
+        memmove(n_pa, (char*)pa, PGSIZE);
+        *pte = PA2PTE(n_pa) | ((PTE_FLAGS(*pte) & ~PTE_COW) | PTE_W);
+        kfree((void*)pa);
+
+        return 0;
+    } else {
+        return -1;
+    }
 }
 

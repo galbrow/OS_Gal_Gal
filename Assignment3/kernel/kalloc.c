@@ -9,6 +9,13 @@
 #include "riscv.h"
 #include "defs.h"
 
+// added lock and reference table
+#define NUM_PYS_PAGES ((PHYSTOP-KERNBASE) / PGSIZE)
+#define PA2IDX(pa) ((((uint64) pa) - KERNBASE) / PGSIZE)
+
+int references[NUM_PYS_PAGES];
+struct spinlock r_lock;
+
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
@@ -23,10 +30,40 @@ struct {
   struct run *freelist;
 } kmem;
 
+
+
+int
+reference_find(uint64 pa)
+{
+    return references[PA2IDX(pa)];
+}
+
+int
+reference_add(uint64 pa)
+{
+    int ref;
+    acquire(&r_lock);
+    ref = ++references[PA2IDX(pa)];
+    release(&r_lock);
+    return ref;
+}
+
+int
+reference_remove(uint64 pa)
+{
+    int ref;
+    acquire(&r_lock);
+    ref = --references[PA2IDX(pa)];
+    release(&r_lock);
+    return ref;
+}
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&r_lock, "refereces");
+  memset(references, 0, sizeof(int)*NUM_PYS_PAGES);
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -51,6 +88,11 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  if (reference_remove((uint64)pa) > 0)
+      return;
+
+  references[PA2IDX(pa)] = 0;
+
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
 
@@ -72,11 +114,14 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
-    kmem.freelist = r->next;
+  if(r) {
+      references[PA2IDX(r)] = 1;
+      kmem.freelist = r->next;
+  }
   release(&kmem.lock);
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+
