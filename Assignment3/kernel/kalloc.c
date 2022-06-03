@@ -15,6 +15,7 @@
 
 int references[NUM_PYS_PAGES];
 struct spinlock r_lock;
+extern uint64 cas(volatile void* addr, int expected, int new_val);
 
 void freerange(void *pa_start, void *pa_end);
 
@@ -38,24 +39,22 @@ reference_find(uint64 pa)
     return references[PA2IDX(pa)];
 }
 
-int
+void
 reference_add(uint64 pa)
 {
-    int ref;
-    acquire(&r_lock);
-    ref = ++references[PA2IDX(pa)];
-    release(&r_lock);
-    return ref;
+    int ref; //ref = old
+    do{
+        ref = references[PA2IDX(pa)];
+    }while(cas(&references[PA2IDX(pa)],ref,ref+1))
 }
 
 int
 reference_remove(uint64 pa)
 {
-    int ref;
-    acquire(&r_lock);
-    ref = --references[PA2IDX(pa)];
-    release(&r_lock);
-    return ref;
+    int ref; //ref = old
+    do{
+        ref = references[PA2IDX(pa)];
+    }while(cas(&references[PA2IDX(pa)],ref,ref-1))
 }
 
 void
