@@ -39,13 +39,14 @@ reference_find(uint64 pa)
     return references[PA2IDX(pa)];
 }
 
-void
+int
 reference_add(uint64 pa)
 {
     int ref; //ref = old
     do{
         ref = references[PA2IDX(pa)];
-    }while(cas(&references[PA2IDX(pa)],ref,ref+1))
+    }while(cas(&references[PA2IDX(pa)],ref,ref+1));
+    return ref+1;
 }
 
 int
@@ -54,7 +55,8 @@ reference_remove(uint64 pa)
     int ref; //ref = old
     do{
         ref = references[PA2IDX(pa)];
-    }while(cas(&references[PA2IDX(pa)],ref,ref-1))
+    }while(cas(&references[PA2IDX(pa)],ref,ref-1));
+    return ref-1;
 }
 
 void
