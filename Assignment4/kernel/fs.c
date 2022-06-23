@@ -420,7 +420,7 @@ bmap(struct inode *ip, uint bn)
       brelse(bp);
 
       //find disk block
-      bp = bread(ip->addrs, addr);
+      bp = bread(ip->dev, addr);
       a = (uint*)bp->data;
       uint pos = bn%NINDIRECT;
       if((addr = a[pos]) == 0){
