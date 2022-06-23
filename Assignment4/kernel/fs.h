@@ -24,7 +24,7 @@ struct superblock {
 
 #define FSMAGIC 0x10203040
 
-#define NDIRECT 11 // changed the size to 11 and extended 1 ref to double indirect
+#define NDIRECT 12 // changed the size to 11 and extended 1 ref to double indirect
 #define NINDIRECT (BSIZE / sizeof(uint))
 #define MAXFILE (NDIRECT + NINDIRECT + NINDIRECT*NINDIRECT)
 
@@ -37,6 +37,7 @@ struct dinode {
   uint size;            // Size of file (bytes)
   //changed from NDIRECT+1 to NDIRECT+2 to add double linked list
   uint addrs[NDIRECT+2];   // Data block addresses
+  uint padding[15];
 };
 
 // Inodes per block.
