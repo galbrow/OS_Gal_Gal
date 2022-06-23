@@ -427,6 +427,8 @@ bmap(struct inode *ip, uint bn)
           a[pos] = addr = balloc(ip->dev);
           log_write(bp);
       }
+      brelse(bp); //release bp
+
       return addr;
   }
 

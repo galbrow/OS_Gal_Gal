@@ -252,7 +252,7 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
+    if(type == T_SYMLINK ||(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE)))
       return ip;
     iunlockput(ip);
     return 0;
@@ -282,6 +282,10 @@ create(char *path, short type, short major, short minor)
 
   return ip;
 }
+
+
+
+
 
 uint64
 sys_open(void)
@@ -483,4 +487,44 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+
+
+
+// Create the path new as a link to the same inode as old.
+uint64
+sys_symlink(void)
+{
+    char new[MAXPATH], old[MAXPATH];
+    struct inode *dp;
+
+
+    if(argstr(1, old, MAXPATH) < 0 || argstr(0, new, MAXPATH) < 0) {
+        printf("\nfailed to get args\n");
+        return -1;
+    }
+
+    begin_op();
+
+    if ((dp = create(old, T_SYMLINK, 0, 0)) == 0)
+    {
+        printf("\nfailed to create new inode\n");
+        end_op();
+        return -1;
+    }
+
+
+    int len = strlen(new);
+    writei(dp, 0, (uint64)&len, 0, sizeof(int));
+    writei(dp, 0, (uint64)new, sizeof(int), len + 1);
+    iupdate(dp);
+    iunlockput(dp);
+    end_op();
+    return 0;
+}
+
+int
+sys_readlink(void){
+    return 0;
 }
