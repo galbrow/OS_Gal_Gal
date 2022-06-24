@@ -14,7 +14,7 @@ main(int argc, char *argv[])
           fprintf(2, "link %s %s: failed\n", argv[1], argv[2]);
   }
   if (argc == 4) {
-      printf("-------------\nin ls -s %s %s\n",argv[2],argv[3]);
+//      printf("-------------\nin ls -s %s %s\n",argv[2],argv[3]);
       //TODO: verify argv indexs && check about symlink function
       if(symlink(argv[2],argv[3]) < 0){
           fprintf(2, "link -s %s %s: failed\n", argv[2], argv[3]);

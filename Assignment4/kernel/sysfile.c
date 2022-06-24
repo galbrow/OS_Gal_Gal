@@ -209,6 +209,7 @@ sys_unlink(void)
     goto bad;
   ilock(ip);
 
+
   if(ip->nlink < 1)
     panic("unlink: nlink < 1");
   if(ip->type == T_DIR && !isdirempty(ip)){
@@ -217,6 +218,10 @@ sys_unlink(void)
   }
 
   memset(&de, 0, sizeof(de));
+  if(ip->type == T_SYMLINK){
+      char dummy[sizeof(de)];
+      writei(dp, 0, (uint64)dummy, off, sizeof(de));
+  }
   if(writei(dp, 0, (uint64)&de, off, sizeof(de)) != sizeof(de))
     panic("unlink: writei");
   if(ip->type == T_DIR){
@@ -253,15 +258,16 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_SYMLINK ||(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE)))
-      return ip;
+    if(type == T_SYMLINK ||(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))) {
+        printf("in create first if type : %d\n", ip->type);
+        return ip;
+    }
     iunlockput(ip);
     return 0;
   }
 
   if((ip = ialloc(dp->dev, type)) == 0)
     panic("create: ialloc");
-
   ilock(ip);
   ip->major = major;
   ip->minor = minor;
@@ -280,8 +286,7 @@ create(char *path, short type, short major, short minor)
     panic("create: dirlink");
 
   iunlockput(dp);
-
-  return ip;
+    return ip;
 }
 
 
@@ -296,6 +301,7 @@ sys_open(void)
   struct file *f;
   struct inode *ip;
   int n;
+  struct proc* p = myproc();
 
   if((n = argstr(0, path, MAXPATH)) < 0 || argint(1, &omode) < 0)
     return -1;
@@ -309,11 +315,13 @@ sys_open(void)
       return -1;
     }
   } else {
-    int bufsize = MAXPATH;
-    readlink(path,(uint64)path,bufsize);
     if((ip = namei(path)) == 0){
-      end_op();
-      return -1;
+          end_op();
+          return -1;
+    }
+    if(ip->type == T_SYMLINK && strncmp(p->name,"ls",2)){
+        int bufsize = MAXPATH;
+        readlink(path,(uint64)path,bufsize);
     }
     ilock(ip);
     if(ip->type == T_DIR && omode != O_RDONLY){
@@ -402,11 +410,15 @@ sys_chdir(void)
   struct proc *p = myproc();
   
   begin_op();
-  if(argstr(0, path, MAXPATH) < 0 || (ip = namei(path)) == 0){
+  if(argstr(0, path, MAXPATH) < 0){
     end_op();
     return -1;
   }
-  readlink(path,(uint64)path,MAXPATH);
+    readlink(path,(uint64)path,MAXPATH);
+    if((ip = namei(path)) == 0){
+        end_op();
+        return -1;
+    }
   ilock(ip);
   if(ip->type != T_DIR){
     iunlockput(ip);
@@ -518,7 +530,6 @@ sys_symlink(void)
         end_op();
         return -1;
     }
-
 
     int len = strlen(old);
     writei(dp, 0, (uint64)&len, 0, sizeof(int));

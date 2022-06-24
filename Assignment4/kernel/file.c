@@ -94,6 +94,8 @@ filestat(struct file *f, uint64 addr)
   
   if(f->type == FD_INODE || f->type == FD_DEVICE){
     ilock(f->ip);
+//    printf("in create link type : %d\n", f->ip->type);
+//    printf("in create link 22type : %d\n", f->type);
     stati(f->ip, &st);
     iunlock(f->ip);
     if(copyout(p->pagetable, addr, (char *)&st, sizeof(st)) < 0)

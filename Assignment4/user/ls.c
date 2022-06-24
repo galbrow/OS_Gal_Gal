@@ -6,20 +6,32 @@
 char*
 fmtname(char *path)
 {
-  static char buf[DIRSIZ+1];
-  char *p;
+    static char buf[DIRSIZ+1];
+    char *p;
 
-  // Find first character after last slash.
-  for(p=path+strlen(path); p >= path && *p != '/'; p--)
-    ;
-  p++;
+    // Find first character after last slash.
+    for(p=path+strlen(path); p >= path && *p != '/'; p--)
+        ;
+    p++;
 
-  // Return blank-padded name.
-  if(strlen(p) >= DIRSIZ)
-    return p;
-  memmove(buf, p, strlen(p));
-  memset(buf+strlen(p), ' ', DIRSIZ-strlen(p));
-  return buf;
+    // Return blank-padded name.
+    if(strlen(p) >= DIRSIZ)
+        return p;
+    memmove(buf, p, strlen(p));
+    memset(buf+strlen(p), ' ', DIRSIZ-strlen(p));
+    return buf;
+}
+
+
+void
+append_strings(char* a, char* b){
+    memset(a+strlen(a),'-',1);
+    memset(a+strlen(a),'>',1);
+    memset(a+strlen(a),'.',1);
+    for(int i = 0;i<strlen(b);i++){
+        memset(a+strlen(a),*(b+i),1);
+    }
+    memset(a+strlen(a), ' ', DIRSIZ-strlen(a)+2);
 }
 
 void
@@ -41,7 +53,14 @@ ls(char *path)
     return;
   }
 
+
+  char content[128]; //maxpath = 128
   switch(st.type){
+  case T_SYMLINK:
+      readlink(path,content,128);
+      append_strings(path,content);
+      printf("%s %d %d %l\n",(path+2), st.type, st.ino, st.size);
+      break;
   case T_FILE:
     printf("%s %d %d %l\n", fmtname(path), st.type, st.ino, st.size);
     break;
@@ -63,7 +82,14 @@ ls(char *path)
         printf("ls: cannot stat %s\n", buf);
         continue;
       }
-      printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
+//      printf("before if check type : %d", st.type);
+      if(st.type == T_SYMLINK) {
+          readlink(buf, content, 128);
+          append_strings(buf,content);
+          printf("%s %d %d %l\n",(buf+2), st.type, st.ino, st.size);
+      }
+      else
+          printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
     }
     break;
   }
