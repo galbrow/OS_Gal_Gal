@@ -532,7 +532,7 @@ sys_symlink(void)
 int
 sys_readlink(void){
     struct inode* ip;
-    char pathname[MAXPATH];
+    char* pathname ="";
     uint64 buf;      //TODO: check if buf should be uint or char*
     int bufsize;
     int count = 0;
@@ -549,7 +549,6 @@ sys_readlink(void){
             end_op();
             return -1;
         }
-        printf("ip read type: %d\n", ip->type);
         ilock(ip);
         if (ip->type != T_SYMLINK) {
             iunlock(ip);
@@ -563,14 +562,13 @@ sys_readlink(void){
             end_op();
             return -1;
         }
+//        printf("ip read type: %d\n", ip->type);
+        //1 = virtual address, 0= physical
         readi(ip, 1, buf, sizeof(int), bufsize);
-//    printf("after readi\n");
+        readi(ip, 0, (uint64)pathname, sizeof(int), bufsize);
         iunlock(ip);
-//    printf("after unlock\n");
-//    printf("inner buffer : %s\n", buf);
-//    printf("---------------------------");
-    count++;
-    } while(count < MAX_DEREFERENCE && ip->type != T_SYMLINK);
+        count++;
+    } while(count < MAX_DEREFERENCE && ip->type == T_SYMLINK);
     if(count >= MAX_DEREFERENCE){
         printf("we have a cycle");
         return -1;
