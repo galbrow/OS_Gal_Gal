@@ -13,6 +13,8 @@
 #include "stat.h"
 #include "proc.h"
 
+#define MAX_DEREFERENCE 31
+
 struct devsw devsw[NDEV];
 struct {
   struct spinlock lock;
@@ -178,5 +180,53 @@ filewrite(struct file *f, uint64 addr, int n)
   }
 
   return ret;
+}
+
+int
+readlink(char* pathname, uint64 buf, int bufsize){
+    struct inode* ip;
+    int count = 0;
+//    printf("pathname: %s\nbuf: %p\nbufsize: %d\n");
+    begin_op();
+    //check if pathname exists
+    do {
+        if ((ip = namei(pathname)) == 0) {
+            printf("path name does not exists");
+            end_op();
+            return -1;
+        }
+        ilock(ip);
+        if(count != 0 && ip->type != T_SYMLINK){
+            iunlock(ip);
+            end_op();
+            return 1;
+        }
+        // case we got non t_symlink
+        if (count == 0 && ip->type != T_SYMLINK) {
+            iunlock(ip);
+            printf("type should be symlink");
+            end_op();
+            return -1;
+        }
+        int len = 0;
+        readi(ip, 0, (uint64)&len, 0, sizeof(int));
+        if (len >= bufsize) {
+            iunlock(ip);
+            printf("buf size is not smaller than the len of the resolved path\n");
+            end_op();
+            return -1;
+        }
+//        printf("ip read type: %d\n", ip->type);
+        //1 = virtual address, 0= physical
+        readi(ip, 1, buf, sizeof(int), bufsize);
+        readi(ip, 0, (uint64)pathname, sizeof(int), bufsize);
+        iunlock(ip);
+        count++;
+    } while(count < MAX_DEREFERENCE);
+    if(count >= MAX_DEREFERENCE){
+        printf("we have a cycle");
+        return -1;
+    }
+    return 1;
 }
 
