@@ -489,6 +489,8 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
   uint tot, m;
   struct buf *bp;
 
+//  printf("buf: %p\ninode type: %d\nbufsize: %d\n", dst,ip->type,n);
+
   if(off > ip->size || off + n < off)
     return 0;
   if(off + n > ip->size)
@@ -504,7 +506,8 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
     }
     brelse(bp);
   }
-  return tot;
+//    printf("dst: %p\n", dst);
+    return tot;
 }
 
 // Write data to inode.

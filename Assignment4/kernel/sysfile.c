@@ -16,6 +16,8 @@
 #include "file.h"
 #include "fcntl.h"
 
+
+#define MAX_DEREFERENCE 31
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -313,6 +315,9 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
+    if(ip->type == T_SYMLINK && !(omode & O_NOFOLLOW)){
+
+    }
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -500,14 +505,14 @@ sys_symlink(void)
     struct inode *dp;
 
 
-    if(argstr(1, old, MAXPATH) < 0 || argstr(0, new, MAXPATH) < 0) {
+    if(argstr(0, old, MAXPATH) < 0 || argstr(1, new, MAXPATH) < 0) {
         printf("\nfailed to get args\n");
         return -1;
     }
 
     begin_op();
 
-    if ((dp = create(old, T_SYMLINK, 0, 0)) == 0)
+    if ((dp = create(new, T_SYMLINK, 0, 0)) == 0)
     {
         printf("\nfailed to create new inode\n");
         end_op();
@@ -515,9 +520,9 @@ sys_symlink(void)
     }
 
 
-    int len = strlen(new);
+    int len = strlen(old);
     writei(dp, 0, (uint64)&len, 0, sizeof(int));
-    writei(dp, 0, (uint64)new, sizeof(int), len + 1);
+    writei(dp, 0, (uint64)old, sizeof(int), len + 1);
     iupdate(dp);
     iunlockput(dp);
     end_op();
@@ -526,5 +531,129 @@ sys_symlink(void)
 
 int
 sys_readlink(void){
-    return 0;
+    struct inode* ip;
+    char pathname[MAXPATH];
+    uint64 buf;      //TODO: check if buf should be uint or char*
+    int bufsize;
+    int count = 0;
+    if(argstr(0, pathname, MAXPATH) < 0 || argaddr(1, &buf) < 0 || argint(2, &bufsize) < 0) {
+        printf("\nfailed to get args\n");
+        return -1;
+    }
+//    printf("pathname: %s\nbuf: %p\nbufsize: %d\n");
+    begin_op();
+    //check if pathname exists
+    do {
+        if ((ip = namei(pathname)) == 0) {
+            printf("path name does not exists");
+            end_op();
+            return -1;
+        }
+        printf("ip read type: %d\n", ip->type);
+        ilock(ip);
+        if (ip->type != T_SYMLINK) {
+            iunlock(ip);
+            printf("type should be symlink");
+            end_op();
+            return -1;
+        }
+        if (ip->size >= bufsize) {
+            iunlock(ip);
+            printf("buf size is not smaller than the len of the resolved path");
+            end_op();
+            return -1;
+        }
+        readi(ip, 1, buf, sizeof(int), bufsize);
+//    printf("after readi\n");
+        iunlock(ip);
+//    printf("after unlock\n");
+//    printf("inner buffer : %s\n", buf);
+//    printf("---------------------------");
+    count++;
+    } while(count < MAX_DEREFERENCE && ip->type != T_SYMLINK);
+    if(count >= MAX_DEREFERENCE){
+        printf("we have a cycle");
+        return -1;
+    }
+    return 1;
 }
+
+//void readlink_with_count(inode* ip){
+//    int count = MAX_DEREFERENCE;
+////    struct inode* n =
+//    while(count == 0 || ip->type != T_SYMLINK){
+//        ip = sys_readlink();
+//        count--;
+//    }
+//}
+
+//uint64
+//sys_open(void)
+//{
+//    char path[MAXPATH];
+//    int fd, omode;
+//    struct file *f;
+//    struct inode *ip;
+//    int n;
+//
+//    if((n = argstr(0, path, MAXPATH)) < 0 || argint(1, &omode) < 0)
+//        return -1;
+//
+//    begin_op();
+//
+//    if(omode & O_CREATE){
+//        ip = create(path, T_FILE, 0, 0);
+//        if
+//        (ip == 0){
+//            end_op();
+//            return -1;
+//        }
+//    } else {
+//        if((ip = namei(path)) == 0){
+//            end_op();
+//            return -1;
+//        }
+//        ilock(ip);
+//        if(ip->type == T_DIR && omode != O_RDONLY){
+//            iunlockput(ip);
+//            end_op();
+//            return -1;
+//        }
+//    }
+//
+//    if(ip->type == T_DEVICE && (ip->major < 0 || ip->major >= NDEV)){
+//        iunlockput(ip);
+//        end_op();
+//        return -1;
+//    }
+//
+//    if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
+//        if(f)
+//            fileclose(f);
+//        iunlockput(ip);
+//        end_op();
+//        return -1;
+//    }
+//
+//    if(ip->type == T_DEVICE){
+//        f->type = FD_DEVICE;
+//        f->major = ip->major;
+//    } else {
+//        f->type = FD_INODE;
+//        f->off = 0;
+//    }
+//    f->ip = ip;
+//    f->readable = !(omode & O_WRONLY);
+//    f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+//
+//    if((omode & O_TRUNC) && ip->type == T_FILE){
+//        itrunc(ip);
+//    }
+//
+//    iunlock(ip);
+//    end_op();
+//
+//    return fd;
+//}
+
+
