@@ -191,7 +191,7 @@ readlink(char* pathname, uint64 buf, int bufsize){
     //check if pathname exists
     do {
         if ((ip = namei(pathname)) == 0) {
-            printf("path name does not exists");
+//            printf("path name does not exists");
             end_op();
             return -1;
         }
@@ -204,7 +204,6 @@ readlink(char* pathname, uint64 buf, int bufsize){
         // case we got non t_symlink
         if (count == 0 && ip->type != T_SYMLINK) {
             iunlock(ip);
-            printf("type should be symlink");
             end_op();
             return -1;
         }
@@ -212,7 +211,7 @@ readlink(char* pathname, uint64 buf, int bufsize){
         readi(ip, 0, (uint64)&len, 0, sizeof(int));
         if (len >= bufsize) {
             iunlock(ip);
-            printf("buf size is not smaller than the len of the resolved path\n");
+//            printf("buf size is not smaller than the len of the resolved path\n");
             end_op();
             return -1;
         }
@@ -224,7 +223,7 @@ readlink(char* pathname, uint64 buf, int bufsize){
         count++;
     } while(count < MAX_DEREFERENCE);
     if(count >= MAX_DEREFERENCE){
-        printf("we have a cycle");
+        panic("we have a cycle");
         return -1;
     }
     return 1;

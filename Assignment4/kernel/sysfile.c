@@ -309,15 +309,13 @@ sys_open(void)
       return -1;
     }
   } else {
+    int bufsize = MAXPATH;
+    readlink(path,(uint64)path,bufsize);
     if((ip = namei(path)) == 0){
       end_op();
       return -1;
     }
     ilock(ip);
-    if(ip->type == T_SYMLINK){
-        //TODO:
-        iunlockput(ip);
-    }
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
@@ -408,6 +406,7 @@ sys_chdir(void)
     end_op();
     return -1;
   }
+  readlink(path,(uint64)path,MAXPATH);
   ilock(ip);
   if(ip->type != T_DIR){
     iunlockput(ip);
@@ -431,6 +430,7 @@ sys_exec(void)
   if(argstr(0, path, MAXPATH) < 0 || argaddr(1, &uargv) < 0){
     return -1;
   }
+  readlink(path,(uint64)path,MAXPATH);
   memset(argv, 0, sizeof(argv));
   for(i=0;; i++){
     if(i >= NELEM(argv)){
