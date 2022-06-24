@@ -259,7 +259,7 @@ create(char *path, short type, short major, short minor)
     iunlockput(dp);
     ilock(ip);
     if(type == T_SYMLINK ||(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))) {
-        printf("in create first if type : %d\n", ip->type);
+//        printf("in create first if type : %d\n", ip->type);
         return ip;
     }
     iunlockput(ip);
