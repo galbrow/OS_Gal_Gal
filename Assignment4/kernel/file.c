@@ -197,11 +197,12 @@ readlink(char* pathname, uint64 buf, int bufsize){
             end_op();
             return -1;
         }
+
         ilock(ip);
         if(count != 0 && ip->type != T_SYMLINK){
             iunlock(ip);
             end_op();
-            return 1;
+            return -1;
         }
         // case we got non t_symlink
         if (count == 0 && ip->type != T_SYMLINK) {
@@ -225,9 +226,10 @@ readlink(char* pathname, uint64 buf, int bufsize){
         count++;
     } while(count < MAX_DEREFERENCE);
     if(count >= MAX_DEREFERENCE){
+        end_op();
         panic("we have a cycle");
-        return -1;
     }
+    end_op();
     return 1;
 }
 

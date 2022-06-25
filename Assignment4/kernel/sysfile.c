@@ -414,12 +414,18 @@ sys_chdir(void)
     end_op();
     return -1;
   }
-    readlink(path,(uint64)path,MAXPATH);
+
     if((ip = namei(path)) == 0){
         end_op();
         return -1;
     }
-  ilock(ip);
+
+    if(ip->type == T_SYMLINK){
+        readlink(path,(uint64)path,MAXPATH);
+        ip = namei(path);
+    }
+
+    ilock(ip);
   if(ip->type != T_DIR){
     iunlockput(ip);
     end_op();
