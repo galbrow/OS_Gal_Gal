@@ -188,12 +188,9 @@ int
 readlink(char* pathname, uint64 buf, int bufsize){
     struct inode* ip;
     int count = 0;
-//    printf("pathname: %s\nbuf: %p\nbufsize: %d\n");
     begin_op();
-    //check if pathname exists
     do {
         if ((ip = namei(pathname)) == 0) {
-//            printf("path name does not exists");
             end_op();
             return -1;
         }
@@ -214,11 +211,9 @@ readlink(char* pathname, uint64 buf, int bufsize){
         readi(ip, 0, (uint64)&len, 0, sizeof(int));
         if (len >= bufsize) {
             iunlock(ip);
-//            printf("buf size is not smaller than the len of the resolved path\n");
             end_op();
             return -1;
         }
-//        printf("ip read type: %d\n", ip->type);
         //1 = virtual address, 0= physical
         readi(ip, 1, buf, sizeof(int), bufsize);
         readi(ip, 0, (uint64)pathname, sizeof(int), bufsize);
